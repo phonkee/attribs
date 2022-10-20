@@ -56,9 +56,10 @@ Currently supported (tested) types are
 - struct  (and pointers)
 - array
 
-# Work in progress
+# Todo:
 
 - [ ] add support for escape sequences in string literals
+- [ ] add support for squash?
 
 # Author
 
