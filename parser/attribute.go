@@ -19,12 +19,3 @@ type Attribute struct {
 func (p *Attribute) HasValue() bool {
 	return p.Value != nil || p.Attributes != nil || p.Array != nil
 }
-
-// Value represents val of attribute
-// - Number represents any number int/float
-// - String represents: string, bool
-type Value struct {
-	Position int
-	String   *string
-	Number   *string
-}

@@ -205,7 +205,7 @@ func (p *parser) parseAttribute() (result Attribute, _ error) {
 		default:
 			// anything else means that we have flag enabled
 			trueValue := "true"
-			result.Value = &Value{Position: pos, String: &trueValue}
+			result.Value = &Value{Position: pos, Boolean: &trueValue}
 			p.unlex(pos, token, value)
 		}
 	default:
@@ -223,6 +223,10 @@ func (p *parser) parseValue() (result Value, _ error) {
 		result.String = &value
 		return result, nil
 	case TokenIdent: // string or boolean
+		if value == "true" || value == "false" {
+			result.Boolean = &value
+			return result, nil
+		}
 		result.String = &value
 		return result, nil
 	case TokenNumber:

@@ -192,14 +192,14 @@ type boolAttribute struct {
 }
 
 func (b *boolAttribute) SetValue(result reflect.Value, attr *parser.Attribute) error {
-	if attr.Value == nil || attr.Value.String == nil {
+	if attr.Value == nil || attr.Value.Boolean == nil {
 		return parser.NewParseError(attr.Position, "invalid value for %s", attr.Name)
 	}
 	if !result.CanSet() {
 		return parser.NewParseError(attr.Position, "cannot set value for %s", attr.Name)
 	}
 
-	val := *attr.Value.String
+	val := *attr.Value.Boolean
 
 	if val != "true" && val != "false" {
 		return parser.NewParseError(attr.Position, "invalid value for %s", attr.Name)
@@ -269,7 +269,6 @@ func (a *arrayAttribute) SetValue(result reflect.Value, attr *parser.Attribute) 
 		if err := a.attr.SetValue(val, &item); err != nil {
 			return fmt.Errorf("cannot set array value for %s: %s", attr.Name, err)
 		}
-		// TODO: this returns the shit (ahhh)
 		nu = reflect.Append(nu, val)
 	}
 
