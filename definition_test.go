@@ -1,6 +1,7 @@
 package attribs_test
 
 import (
+	"github.com/davecgh/go-spew/spew"
 	"testing"
 
 	"github.com/phonkee/attribs"
@@ -239,5 +240,35 @@ func TestAttrs(t *testing.T) {
 			}
 		}
 
+	})
+
+	t.Run("test recursive struct", func(t *testing.T) {
+		type Recursive struct {
+			Inner *Recursive `attr:"name=inner"`
+		}
+
+		def, err := attribs.New(Recursive{})
+		assert.NoError(t, err)
+		assert.NotNil(t, def)
+	})
+}
+
+func TestFullRecursionWithSlice(t *testing.T) {
+	t.Run("test slice", func(t *testing.T) {
+		type Recursive struct {
+			Value int        `attr:"name=value"`
+			Item  *Recursive `attr:"name=item"`
+		}
+
+		type What struct {
+			Children []*What `attr:"name=children"`
+		}
+
+		def, err := attribs.New(Recursive{})
+		assert.NoError(t, err)
+		assert.NotNil(t, def)
+		v, err := def.Parse("value=42, item(value=43)")
+		assert.NoError(t, err)
+		spew.Dump(v)
 	})
 }

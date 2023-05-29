@@ -108,7 +108,6 @@ func TestParse(t *testing.T) {
 			assert.Equal(t, item.expect, result)
 		}
 	})
-
 }
 
 func ptr[T any](t T) *T {

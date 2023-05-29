@@ -60,7 +60,11 @@ func New[T any](what T) (result Definition[T], _ error) {
 		return result, ErrNotStruct
 	}
 
-	attr, err := define(reflect.TypeOf(what), baseAttribute{})
+	// prepare cache for attributes to support recursive structs
+	c := newCache()
+
+	// TODO: add support for recursive structs: initialize cache
+	attr, err := define(reflect.TypeOf(what), baseAttribute{}, c)
 	if err != nil {
 		return result, err
 	}
@@ -71,10 +75,15 @@ func New[T any](what T) (result Definition[T], _ error) {
 }
 
 // define defines given attribute and returns definition
-func define(typ reflect.Type, base baseAttribute) (result Attribute, _ error) {
+func define(typ reflect.Type, base baseAttribute, cache Cache) (result Attribute, _ error) {
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
 		base.Nullable = true
+	}
+
+	// check cache first
+	if attr, ok := cache.Get(typ); ok {
+		return attr, nil
 	}
 
 	switch typ.Kind() {
@@ -128,6 +137,7 @@ func define(typ reflect.Type, base baseAttribute) (result Attribute, _ error) {
 			baseAttribute: base,
 		}
 	case reflect.Array, reflect.Slice:
+		// now parse array (only - item)
 		result = &arrayAttribute{
 			baseAttribute: base,
 		}
@@ -147,8 +157,13 @@ func define(typ reflect.Type, base baseAttribute) (result Attribute, _ error) {
 		return nil, fmt.Errorf("%w: %v", ErrUnsupportedType, typ.String())
 	}
 
+	// set to cache before initialization to support recursive structs
+	if err := cache.Set(typ, result); err != nil {
+		return nil, err
+	}
+
 	// initialize given attribute
-	if err := result.Init(typ); err != nil {
+	if err := result.Init(typ, cache); err != nil {
 		return nil, err
 	}
 
