@@ -41,7 +41,9 @@ type attrInfo struct {
 // Init initializes Attribute with given value and tag
 func (s *structAttribute) Init(typ reflect.Type) error {
 	// init fields
-	s.fields = map[string]attrInfo{}
+	if s.fields == nil {
+		s.fields = map[string]attrInfo{}
+	}
 
 	// iterate over all fields
 	for i := 0; i < typ.NumField(); i++ {
@@ -50,8 +52,11 @@ func (s *structAttribute) Init(typ reflect.Type) error {
 		if ft.PkgPath != "" {
 			continue
 		}
-		// embedded structs not supported yet
+		// support for embedded structs
 		if ft.Anonymous {
+			if err := s.Init(ftType); err != nil {
+				return err
+			}
 			continue
 		}
 
