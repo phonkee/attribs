@@ -105,4 +105,35 @@ func TestLexer(t *testing.T) {
 		}
 	})
 
+	t.Run("test negative numbers", func(t *testing.T) {
+		data := []struct {
+			input   string
+			tok     Token
+			val     string
+			pos     int
+			errCont string
+		}{
+			{input: "-1234", tok: TokenNumber, val: "-1234", pos: 0},
+			{input: "-.1234", tok: TokenNumber, val: "-0.1234", pos: 0},
+			{input: "-1234xxx", tok: TokenNumber, val: "-1234", pos: 0},
+			{input: "-1234.566", tok: TokenNumber, val: "-1234.566", pos: 0},
+			{input: "-1234.566.888", tok: TokenNumber, pos: 0, errCont: "found multiple dots in number"},
+			{input: "-.888", tok: TokenNumber, val: "-0.888", pos: 0},
+			{input: "-.888.123", tok: TokenNumber, pos: 0, errCont: "found multiple dots in number"},
+		}
+
+		for _, item := range data {
+			pos, token, value := newLexer(strings.NewReader(item.input)).Lex()
+			if item.errCont != "" {
+				assert.True(t, token == TokenError, "inp: %v", item.input)
+				assert.Contains(t, value, item.errCont)
+			} else {
+				assert.Equal(t, item.pos, pos, "inp: %v", item.input)
+				assert.Equal(t, item.tok, token)
+				assert.Equal(t, item.val, value)
+			}
+		}
+
+	})
+
 }

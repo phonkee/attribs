@@ -11,10 +11,13 @@ import (
 // Attribute defines interface for attribute
 type Attribute interface {
 	// Init initializes Attribute with given type
-	Init(value reflect.Type) error
+	Init(value reflect.Type, cache Cache) error
 
 	// SetValue sets value for given attribute
 	SetValue(reflect.Value, *parser.Attribute) error
+
+	// Item returns item of attribute
+	Item() (*parser.Attribute, bool)
 }
 
 // baseAttribute defines base attribute properties
@@ -26,7 +29,7 @@ type baseAttribute struct {
 }
 
 // Init is base for all embeddees
-func (b baseAttribute) Init(value reflect.Type) error { return nil }
+func (b baseAttribute) Init(value reflect.Type, cache Cache) error { return nil }
 
 type structAttribute struct {
 	baseAttribute
@@ -39,7 +42,7 @@ type attrInfo struct {
 }
 
 // Init initializes Attribute with given value and tag
-func (s *structAttribute) Init(typ reflect.Type) error {
+func (s *structAttribute) Init(typ reflect.Type, cache Cache) error {
 	// init fields
 	if s.fields == nil {
 		s.fields = map[string]attrInfo{}
@@ -54,7 +57,7 @@ func (s *structAttribute) Init(typ reflect.Type) error {
 		}
 		// support for embedded structs
 		if ft.Anonymous {
-			if err := s.Init(ftType); err != nil {
+			if err := s.Init(ftType, cache); err != nil {
 				return err
 			}
 			continue
@@ -78,7 +81,7 @@ func (s *structAttribute) Init(typ reflect.Type) error {
 			base.Nullable = true
 		}
 
-		p, err := define(ftType, base)
+		p, err := define(ftType, base, cache)
 		if err != nil {
 			return err
 		}
@@ -125,11 +128,21 @@ func (s *structAttribute) SetValue(result reflect.Value, attr *parser.Attribute)
 	return nil
 }
 
+// Item is no op
+func (*structAttribute) Item() (*parser.Attribute, bool) {
+	return nil, false
+}
+
 // intAttribute handles numbers
 type intAttribute struct {
 	baseAttribute
 	width    int
 	unsigned bool
+}
+
+// Item is no op
+func (*intAttribute) Item() (*parser.Attribute, bool) {
+	return nil, false
 }
 
 func (i *intAttribute) SetValue(result reflect.Value, attr *parser.Attribute) error {
@@ -192,6 +205,11 @@ func (f *floatAttribute) SetValue(result reflect.Value, attr *parser.Attribute) 
 	return nil
 }
 
+// Item is no op
+func (*floatAttribute) Item() (*parser.Attribute, bool) {
+	return nil, false
+}
+
 type boolAttribute struct {
 	baseAttribute
 }
@@ -223,6 +241,11 @@ func (b *boolAttribute) SetValue(result reflect.Value, attr *parser.Attribute) e
 	return nil
 }
 
+// Item is no op
+func (*boolAttribute) Item() (*parser.Attribute, bool) {
+	return nil, false
+}
+
 type stringAttribute struct {
 	baseAttribute
 }
@@ -245,6 +268,11 @@ func (s *stringAttribute) SetValue(result reflect.Value, attr *parser.Attribute)
 	return nil
 }
 
+// Item is no op
+func (*stringAttribute) Item() (*parser.Attribute, bool) {
+	return nil, false
+}
+
 type arrayAttribute struct {
 	baseAttribute
 	attr    Attribute
@@ -252,8 +280,8 @@ type arrayAttribute struct {
 }
 
 // Init initializes arrayAttribute with proper Attribute
-func (a *arrayAttribute) Init(typ reflect.Type) (err error) {
-	a.attr, err = define(typ.Elem(), baseAttribute{})
+func (a *arrayAttribute) Init(typ reflect.Type, cache Cache) (err error) {
+	a.attr, err = define(typ.Elem(), baseAttribute{}, cache)
 	a.itemTyp = typ.Elem()
 	return
 }
@@ -280,4 +308,9 @@ func (a *arrayAttribute) SetValue(result reflect.Value, attr *parser.Attribute) 
 	result.Set(nu)
 
 	return nil
+}
+
+func (a *arrayAttribute) Item() (*parser.Attribute, bool) {
+	panic("here")
+	return nil, false
 }

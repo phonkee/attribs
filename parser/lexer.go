@@ -86,10 +86,28 @@ func (l *lexer) Lex() (int, Token, string) {
 			if unicode.IsSpace(r) {
 				continue // nothing to do here, just move on
 			}
-			if unicode.IsDigit(r) || r == '.' {
+			if unicode.IsDigit(r) || r == '.' || r == '-' {
+				str := string(r)
+				if r == '-' {
+					r, err := l.read()
+					if err != nil {
+						if err == io.EOF {
+							return l.pos - 1, TokenError, "found minus sign at EOF"
+						}
+						return l.pos - 1, TokenError, err.Error()
+					}
+					l.unread()
+					if !(unicode.IsDigit(r) || r == '.') {
+						return l.pos - 1, TokenString, ""
+					}
+
+					if r == '.' {
+						str += "0"
+					}
+				}
+
 				var foundDot = r == '.'
 
-				str := string(r)
 				for {
 					r, err := l.read()
 					if err != nil {
