@@ -106,8 +106,7 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 			fieldType := val.Type().Field(i)
 
 			// skip unexported fields
-			// TODO: add support for embedded structs
-			if !fieldType.IsExported() || fieldType.Anonymous {
+			if !fieldType.IsExported() {
 				continue
 			}
 
@@ -135,6 +134,23 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 			// skip disabled fields
 			if pa.Disabled {
 				continue
+			}
+
+			// Support for embedded structs
+			if fieldType.Anonymous {
+				fieldAttr.Name = fieldType.Type.Name()
+
+				// merge properties from embedded struct to current struct
+				// this is a naive way, since we don't store whole tree of embedded structs to set values.
+				// this is prone to duplicates
+				for name, prop := range fieldAttr.Properties {
+					if _, ok := result.Properties[name]; ok {
+						return nil, fmt.Errorf("%w: %v", ErrDuplicateField, name)
+					}
+
+					// naive way
+					result.Properties[name] = prop
+				}
 			}
 
 			// names and aliases

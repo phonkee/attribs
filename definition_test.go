@@ -38,32 +38,32 @@ func TestAttrs(t *testing.T) {
 			expected    AttrDef
 			errExpected string
 		}{
-			//{
-			//	input:    "id=42, category_id=64, string='hello world'",
-			//	expected: AttrDef{ID: 42, CategoryID: ptr(64), String: "hello world"},
-			//},
-			//{
-			//	input:    "id=42, category_id=64, string_opt='hello world', uint=99",
-			//	expected: AttrDef{ID: 42, CategoryID: ptr(64), StringOpt: ptr("hello world"), Uint: 99},
-			//},
-			//{
-			//	input:    "id=42, category_id=64, string_opt='hello world', uint_opt=99",
-			//	expected: AttrDef{ID: 42, CategoryID: ptr(64), StringOpt: ptr("hello world"), UintOpt: ptr(uint(99))},
-			//},
-			//{
-			//	input:    "id=42 , category_id = 44,   disabled",
-			//	expected: AttrDef{ID: 42, CategoryID: ptr(44), Disabled: true},
-			//},
-			//{
-			//	input:    "",
-			//	expected: AttrDef{},
-			//},
-			//{
-			//	input: "string = 'hello world'",
-			//	expected: AttrDef{
-			//		String: "hello world",
-			//	},
-			//},
+			{
+				input:    "id=42, category_id=64, string='hello world'",
+				expected: AttrDef{ID: 42, CategoryID: ptr(64), String: "hello world"},
+			},
+			{
+				input:    "id=42, category_id=64, string_opt='hello world', uint=99",
+				expected: AttrDef{ID: 42, CategoryID: ptr(64), StringOpt: ptr("hello world"), Uint: 99},
+			},
+			{
+				input:    "id=42, category_id=64, string_opt='hello world', uint_opt=99",
+				expected: AttrDef{ID: 42, CategoryID: ptr(64), StringOpt: ptr("hello world"), UintOpt: ptr(uint(99))},
+			},
+			{
+				input:    "id=42 , category_id = 44,   disabled",
+				expected: AttrDef{ID: 42, CategoryID: ptr(44), Disabled: true},
+			},
+			{
+				input:    "",
+				expected: AttrDef{},
+			},
+			{
+				input: "string = 'hello world'",
+				expected: AttrDef{
+					String: "hello world",
+				},
+			},
 			{
 				input: "id=1, interval(start=998, end=65535), string_opt=foo, uint=42",
 				expected: AttrDef{
@@ -76,50 +76,50 @@ func TestAttrs(t *testing.T) {
 					Uint:      42,
 				},
 			},
-			//{
-			//	input: "id=1, string_opt=foo, uint=42",
-			//	expected: AttrDef{
-			//		ID:        1,
-			//		StringOpt: ptr("foo"),
-			//		Uint:      42,
-			//	},
-			//},
-			//{
-			//	input:    "id=42, category_id=64, interval(start=1, end=2)",
-			//	expected: AttrDef{ID: 42, CategoryID: ptr(64), Interval: &Interval{Start: 1, End: 2}},
-			//},
-			//{
-			//	input:    "id=42 , category_id = 44,   disabled",
-			//	expected: AttrDef{ID: 42, CategoryID: ptr(44), Disabled: true},
-			//},
-			//{
-			//	input:    "",
-			//	expected: AttrDef{},
-			//},
-			//{
-			//	input: "string = 'hello world'",
-			//	expected: AttrDef{
-			//		String: "hello world",
-			//	},
-			//},
-			//{
-			//	input: "id=1, interval(start=42, end=65535), string_opt=foo",
-			//	expected: AttrDef{
-			//		ID: 1,
-			//		Interval: &Interval{
-			//			Start: 42,
-			//			End:   65535,
-			//		},
-			//		StringOpt: ptr("foo"),
-			//	},
-			//},
-			//{
-			//	input: "f32=1.2, f64=2.1",
-			//	expected: AttrDef{
-			//		F32: 1.2,
-			//		F64: 2.1,
-			//	},
-			//},
+			{
+				input: "id=1, string_opt=foo, uint=42",
+				expected: AttrDef{
+					ID:        1,
+					StringOpt: ptr("foo"),
+					Uint:      42,
+				},
+			},
+			{
+				input:    "id=42, category_id=64, interval(start=1, end=2)",
+				expected: AttrDef{ID: 42, CategoryID: ptr(64), Interval: &Interval{Start: 1, End: 2}},
+			},
+			{
+				input:    "id=42 , category_id = 44,   disabled",
+				expected: AttrDef{ID: 42, CategoryID: ptr(44), Disabled: true},
+			},
+			{
+				input:    "",
+				expected: AttrDef{},
+			},
+			{
+				input: "string = 'hello world'",
+				expected: AttrDef{
+					String: "hello world",
+				},
+			},
+			{
+				input: "id=1, interval(start=42, end=65535), string_opt=foo",
+				expected: AttrDef{
+					ID: 1,
+					Interval: &Interval{
+						Start: 42,
+						End:   65535,
+					},
+					StringOpt: ptr("foo"),
+				},
+			},
+			{
+				input: "f32=1.2, f64=2.1",
+				expected: AttrDef{
+					F32: 1.2,
+					F64: 2.1,
+				},
+			},
 		} {
 			defined, err := attribs.New(AttrDef{})
 			assert.NoError(t, err)
@@ -353,73 +353,73 @@ func TestAttrs(t *testing.T) {
 
 	})
 
-	//t.Skip("test embedded struct", func(t *testing.T) {
-	//	type Inside struct {
-	//		Hello string `attr:"name=hello"`
-	//		World string `attr:"name=world"`
-	//	}
-	//	type Span struct {
-	//		Inside
-	//		Start int `attr:"name=start"`
-	//		End   int `attr:"name=end"`
-	//	}
-	//	type Fourth struct {
-	//		Yes bool `attr:"name=yes"`
-	//	}
-	//	type Other struct {
-	//		Fourth
-	//	}
-	//	type Field struct {
-	//		Name     string `attr:"name=name"`
-	//		Required bool   `attr:"name=required"`
-	//		Other    Other  `attr:"name=other"`
-	//		Span
-	//	}
-	//
-	//	defined, err := attribs.New(Field{})
-	//	assert.NoError(t, err)
-	//
-	//	for _, item := range []struct {
-	//		input       string
-	//		expected    Field
-	//		errExpected string
-	//	}{
-	//		{
-	//			input: "name = 'this is the name'",
-	//			expected: Field{
-	//				Name:     "this is the name",
-	//				Required: false,
-	//			},
-	//		},
-	//		{
-	//			input: "name = 'this is the name', start=42, end=1024, hello='hello', world='world', other(yes=true)",
-	//			expected: Field{
-	//				Name:     "this is the name",
-	//				Required: false,
-	//				Span: Span{
-	//					Inside: Inside{
-	//						Hello: "hello",
-	//						World: "world",
-	//					},
-	//					Start: 42,
-	//					End:   1024,
-	//				},
-	//				Other: Other{
-	//					Fourth: Fourth{
-	//						Yes: true,
-	//					},
-	//				},
-	//			},
-	//		},
-	//	} {
-	//		value, err := defined.Parse(item.input)
-	//		if item.errExpected != "" {
-	//			assert.NotNil(t, err)
-	//			assert.Contains(t, err.Error(), item.errExpected)
-	//		} else {
-	//			assert.NoError(t, err)
-	//			assert.Equal(t, item.expected, value)
-	//		}
-	//	}
-	//})
+	t.Run("test embedded struct", func(t *testing.T) {
+		type Inside struct {
+			Hello string `attr:"name=hello"`
+			World string `attr:"name=world"`
+		}
+		type Span struct {
+			Inside
+			Start int `attr:"name=start"`
+			End   int `attr:"name=end"`
+		}
+		type Fourth struct {
+			Yes bool `attr:"name=yes"`
+		}
+		type Other struct {
+			Fourth
+		}
+		type Field struct {
+			Name     string `attr:"name=name"`
+			Required bool   `attr:"name=required"`
+			Other    Other  `attr:"name=other"`
+			Span
+		}
+
+		defined, err := attribs.New(Field{})
+		assert.NoError(t, err)
+
+		for _, item := range []struct {
+			input       string
+			expected    Field
+			errExpected string
+		}{
+			{
+				input: "name = 'this is the name'",
+				expected: Field{
+					Name:     "this is the name",
+					Required: false,
+				},
+			},
+			{
+				input: "name = 'this is the name', start=42, end=1024, hello='hello', world='world', other(yes=true)",
+				expected: Field{
+					Name:     "this is the name",
+					Required: false,
+					Span: Span{
+						Inside: Inside{
+							Hello: "hello",
+							World: "world",
+						},
+						Start: 42,
+						End:   1024,
+					},
+					Other: Other{
+						Fourth: Fourth{
+							Yes: true,
+						},
+					},
+				},
+			},
+		} {
+			value, err := defined.Parse(item.input)
+			if item.errExpected != "" {
+				assert.NotNil(t, err)
+				assert.Contains(t, err.Error(), item.errExpected)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, item.expected, value)
+			}
+		}
+	})
 }
