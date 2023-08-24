@@ -90,6 +90,7 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 		result.Type = attrTypeStruct
 
 		// TODO: peek into cache, if enabled with 2 same fields, it will issue
+		// TODO: recursive structures still not supported
 		//if cached, ok := cache[originalType]; ok {
 		//	return cached, nil
 		//}
