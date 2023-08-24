@@ -1,6 +1,8 @@
 package attribs
 
 import (
+	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/phonkee/attribs/parser"
 	"reflect"
 	"strconv"
@@ -18,13 +20,42 @@ const (
 	attrTypeBoolean
 )
 
+func (a attrType) String() string {
+	switch a {
+	case attrTypeInvalid:
+		return "invalid"
+	case attrTypeInteger:
+		return "integer"
+	case attrTypeString:
+		return "string"
+	case attrTypeFloat:
+		return "float"
+	case attrTypeStruct:
+		return "struct"
+	case attrTypeArray:
+		return "array"
+	case attrTypeBoolean:
+		return "boolean"
+	}
+	return "unknown"
+}
+
 // inspect given value and return attribute
 func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
+	if _, ok := what.(reflect.Type); ok {
+		panic("passing type to inspect is not supported")
+	}
+
 	val := reflect.ValueOf(what)
+	originalType := val.Type()
 
 	// prepare result
 	result := &attr{
 		Nullable: val.Kind() == reflect.Pointer,
+	}
+
+	if val.Kind() == reflect.Ptr && val.IsNil() {
+		val.Set(reflect.New(val.Type().Elem()))
 	}
 
 	// get element from pointer
@@ -38,19 +69,34 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 		result.Signed = true
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		result.Type = attrTypeInteger
+	case reflect.Float32, reflect.Float64:
+		result.Type = attrTypeFloat
 	case reflect.Bool:
 		result.Type = attrTypeBoolean
 	case reflect.String:
 		result.Type = attrTypeString
 	case reflect.Array, reflect.Slice:
 		result.Type = attrTypeArray
-		elem, err := inspect(reflect.Indirect(reflect.New(val.Type().Elem())), cache)
+		newType := reflect.Indirect(reflect.New(val.Type().Elem()))
+		if newType.Kind() == reflect.Ptr && newType.IsNil() {
+			newType.Set(reflect.New(newType.Type().Elem()))
+		}
+		elem, err := inspect(newType.Interface(), cache)
 		if err != nil {
 			return nil, err
 		}
+		elem.Name = val.Type().Elem().String()
 		result.Elem = elem
 	case reflect.Struct:
 		result.Type = attrTypeStruct
+
+		// TODO: peek into cache, if enabled with 2 same fields, it will issue
+		//if cached, ok := cache[originalType]; ok {
+		//	return cached, nil
+		//}
+
+		// cache schema for this type to avoid infinite recursion
+		cache[originalType] = result
 
 		// prepare all props
 		result.Properties = make(map[string]*attr)
@@ -68,12 +114,14 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 
 			var newValue any
 
+			// prepare new value for field, so we can inspect it
 			if field.Type().Kind() == reflect.Ptr {
 				newValue = reflect.Indirect(reflect.New(field.Type().Elem())).Interface()
 			} else {
 				newValue = reflect.Indirect(reflect.New(field.Type())).Interface()
 			}
 
+			// field attribute returned from inspect
 			fieldAttr, err := inspect(newValue, cache)
 			if err != nil {
 				return nil, err
@@ -97,6 +145,7 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 				fieldAttr.Alias = fieldAttr.Name
 			}
 
+			// add field attribute to struct properties
 			result.Properties[fieldAttr.Alias] = fieldAttr
 		}
 
@@ -136,15 +185,15 @@ func (a *attr) Set(target reflect.Value, parsed *parser.Attribute) error {
 
 	switch a.Type {
 	case attrTypeInteger:
-		return a.SetInteger(target, parsed)
+		return a.setInteger(target, parsed)
 	case attrTypeString:
-		return a.SetString(target, parsed)
+		return a.setString(target, parsed)
 	case attrTypeFloat:
-		//
+		return a.setFloat(target, parsed)
 	case attrTypeArray:
-		//
+		return a.setArray(target, parsed)
 	case attrTypeBoolean:
-		//
+		return a.setBoolean(target, parsed)
 	case attrTypeStruct:
 		for _, att := range parsed.Attributes {
 			prop, ok := a.Properties[att.Name]
@@ -158,26 +207,82 @@ func (a *attr) Set(target reflect.Value, parsed *parser.Attribute) error {
 				field = target.FieldByName(prop.Name)
 			}
 
-			// handle pointers
-			if target.Type().Kind() == reflect.Ptr {
-				field.Set(reflect.New(target.Type().Elem()))
-			}
-
+			// set property
 			if err := prop.Set(field, &att); err != nil {
 				return err
 			}
 		}
 	default:
-		panic("implement me")
+		return parser.NewParseError(parsed.Position, "invalid attribute type %d", a.Type)
 	}
 
 	return nil
 }
 
-func (a *attr) SetInteger(target reflect.Value, parsed *parser.Attribute) error {
+func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute) error {
+	if parsed.Array == nil {
+		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+	}
+
+	typ := target.Type().Elem()
+
+	nu := reflect.Indirect(reflect.New(target.Type()))
+	if nu.Kind() == reflect.Ptr && nu.IsNil() {
+		nu.Set(reflect.New(nu.Type().Elem()))
+	}
+
+	// iterate over all values and set one by one
+	for _, item := range parsed.Array {
+
+		val := reflect.Indirect(reflect.New(typ))
+		if err := a.Elem.Set(val, &item); err != nil {
+			return fmt.Errorf("cannot set array value for %s: %s", parsed.Name, err)
+		}
+		nu = reflect.Append(nu, val)
+	}
+
+	target.Set(nu)
+
+	return nil
+}
+
+func (a *attr) setBoolean(target reflect.Value, parsed *parser.Attribute) error {
+	if parsed.Value == nil || parsed.Value.Boolean == nil {
+		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+	}
+
+	val := *parsed.Value.Boolean
+
+	if val != "true" && val != "false" {
+		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+	}
+
+	// we know it's correct
+	value, _ := strconv.ParseBool(val)
+
+	target.SetBool(value)
+
+	return nil
+}
+
+func (a *attr) setFloat(target reflect.Value, parsed *parser.Attribute) error {
 	if parsed.Value == nil || parsed.Value.Number == nil {
 		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
 	}
+	if value, err := strconv.ParseFloat(*parsed.Value.Number, 64); err != nil {
+		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+	} else {
+		target.SetFloat(value)
+	}
+	return nil
+
+}
+
+func (a *attr) setInteger(target reflect.Value, parsed *parser.Attribute) error {
+	if parsed.Value == nil || parsed.Value.Number == nil {
+		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+	}
+
 	if target.Kind() == reflect.Ptr {
 		target = target.Elem()
 	}
@@ -198,13 +303,14 @@ func (a *attr) SetInteger(target reflect.Value, parsed *parser.Attribute) error 
 	return nil
 }
 
-func (a *attr) SetString(target reflect.Value, parsed *parser.Attribute) error {
+func (a *attr) setString(target reflect.Value, parsed *parser.Attribute) error {
 	if parsed.Value == nil || parsed.Value.String == nil {
 		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
 	}
 	if target.Kind() == reflect.Ptr {
 		target = target.Elem()
 	}
+	spew.Dump(target.Interface())
 	target.SetString(*parsed.Value.String)
 
 	return nil
