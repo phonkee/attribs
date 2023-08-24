@@ -2,6 +2,7 @@ package attribs
 
 import (
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"reflect"
 	"strconv"
 
@@ -20,7 +21,7 @@ type Attribute interface {
 	Item() (*parser.Attribute, bool)
 }
 
-// baseAttribute defines base attribute properties
+// baseAttribute defines base attribute Properties
 type baseAttribute struct {
 	Name     string
 	Alias    string
@@ -295,7 +296,15 @@ func (a *arrayAttribute) SetValue(result reflect.Value, attr *parser.Attribute) 
 		return parser.NewParseError(attr.Position, "cannot set value for %s", attr.Name)
 	}
 
-	nu := reflect.New(result.Type()).Elem()
+	var (
+		typ   = result.Type()
+		isPtr = typ.Kind() == reflect.Ptr
+	)
+
+	if typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
+	nu := reflect.Indirect(reflect.New(typ))
 
 	for _, item := range attr.Array {
 		val := reflect.Indirect(reflect.New(a.itemTyp))
@@ -305,7 +314,12 @@ func (a *arrayAttribute) SetValue(result reflect.Value, attr *parser.Attribute) 
 		nu = reflect.Append(nu, val)
 	}
 
-	result.Set(nu)
+	if isPtr {
+		spew.Dump(result)
+		result.Set(nu)
+	} else {
+		result.Set(nu)
+	}
 
 	return nil
 }
