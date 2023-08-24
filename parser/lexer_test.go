@@ -23,7 +23,8 @@ func TestLexer(t *testing.T) {
 			{inp: "]", tok: TokenCloseSquareBracket},
 			{inp: "'hello world'", tok: TokenString, val: "hello world"},
 			{inp: "'hello world", tok: TokenError, pos: 12},
-			{inp: "'hello \\' world'", tok: TokenString, val: "hello \\' world"},
+			{inp: `'hello \' world'`, tok: TokenString, val: "hello ' world"},
+			{inp: `'hello \\ world'`, tok: TokenString, val: "hello \\\\ world"},
 			{inp: "1234", tok: TokenNumber, val: "1234"},
 			{inp: "1234xxx", tok: TokenNumber, val: "1234"},
 			{inp: "1234.566", tok: TokenNumber, val: "1234.566"},
@@ -33,9 +34,10 @@ func TestLexer(t *testing.T) {
 		}
 
 		for _, item := range data {
-			pos, token, _ := newLexer(strings.NewReader(item.inp)).Lex()
+			pos, token, val := newLexer(strings.NewReader(item.inp)).Lex()
 			assert.Equal(t, item.pos, pos, "inp: %v", item.inp)
 			assert.Equal(t, item.tok, token)
+			assert.Equal(t, item.val, val)
 		}
 	})
 
@@ -48,13 +50,14 @@ func TestLexer(t *testing.T) {
 		}{
 			{inp: "'hello world'", tok: TokenString, val: "hello world"},
 			{inp: "'hello world", tok: TokenError, pos: 12},
-			{inp: "'hello \\' world'", tok: TokenString, val: "hello \\' world"},
+			{inp: `'hello \' world'`, tok: TokenString, val: `hello ' world`},
 		}
 
 		for _, item := range data {
-			pos, token, _ := newLexer(strings.NewReader(item.inp)).Lex()
+			pos, token, val := newLexer(strings.NewReader(item.inp)).Lex()
 			assert.Equal(t, item.pos, pos, "inp: %v", item.inp)
 			assert.Equal(t, item.tok, token)
+			assert.Equal(t, item.val, val)
 		}
 	})
 

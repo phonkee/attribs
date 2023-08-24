@@ -45,6 +45,7 @@ func (l *lexer) Lex() (int, Token, string) {
 		case '\'':
 			str := ""
 			pos := l.pos - 1
+		outer:
 			for {
 				r, err := l.read()
 				if err != nil {
@@ -65,7 +66,8 @@ func (l *lexer) Lex() (int, Token, string) {
 					}
 					switch pr {
 					case '\'':
-						str += string(r)
+						str += string(pr)
+						continue outer
 					case '\\':
 						// TODO: iterate over this over and over until we find a quote
 						str += string(r)

@@ -251,9 +251,16 @@ func TestAttrs(t *testing.T) {
 			Start int `attr:"name=start"`
 			End   int `attr:"name=end"`
 		}
+		type Fourth struct {
+			Yes bool `attr:"name=yes"`
+		}
+		type Other struct {
+			Fourth
+		}
 		type Field struct {
 			Name     string `attr:"name=name"`
 			Required bool   `attr:"name=required"`
+			Other    Other  `attr:"name=other"`
 			Span
 		}
 
@@ -273,7 +280,7 @@ func TestAttrs(t *testing.T) {
 				},
 			},
 			{
-				input: "name = 'this is the name', start=42, end=1024, hello='hello', world='world'",
+				input: "name = 'this is the name', start=42, end=1024, hello='hello', world='world', other(yes=true)",
 				expected: Field{
 					Name:     "this is the name",
 					Required: false,
@@ -284,6 +291,11 @@ func TestAttrs(t *testing.T) {
 						},
 						Start: 42,
 						End:   1024,
+					},
+					Other: Other{
+						Fourth: Fourth{
+							Yes: true,
+						},
 					},
 				},
 			},
