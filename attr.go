@@ -2,315 +2,333 @@ package attribs
 
 import (
 	"fmt"
+	"github.com/phonkee/attribs/parser"
 	"reflect"
 	"strconv"
-
-	"github.com/phonkee/attribs/parser"
 )
 
-// Attribute defines interface for attribute
-type Attribute interface {
-	// Init initializes Attribute with given type
-	Init(value reflect.Type, cache Cache) error
+type attrType int
 
-	// SetValue sets value for given attribute
-	SetValue(reflect.Value, *parser.Attribute) error
+const (
+	attrTypeInvalid attrType = iota
+	attrTypeInteger
+	attrTypeString
+	attrTypeFloat
+	attrTypeStruct
+	attrTypeArray
+	attrTypeBoolean
+)
 
-	// Item returns item of attribute
-	Item() (*parser.Attribute, bool)
+func (a attrType) String() string {
+	switch a {
+	case attrTypeInvalid:
+		return "invalid"
+	case attrTypeInteger:
+		return "integer"
+	case attrTypeString:
+		return "string"
+	case attrTypeFloat:
+		return "float"
+	case attrTypeStruct:
+		return "struct"
+	case attrTypeArray:
+		return "array"
+	case attrTypeBoolean:
+		return "boolean"
+	}
+	return "unknown"
 }
 
-// baseAttribute defines base attribute properties
-type baseAttribute struct {
+// inspect given value and return attribute
+func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
+	if _, ok := what.(reflect.Type); ok {
+		panic("passing type to inspect is not supported")
+	}
+
+	val := reflect.ValueOf(what)
+	originalType := val.Type()
+
+	// prepare result
+	result := &attr{
+		Nullable: val.Kind() == reflect.Pointer,
+	}
+
+	if val.Kind() == reflect.Ptr && val.IsNil() {
+		val.Set(reflect.New(val.Type().Elem()))
+	}
+
+	// get element from pointer
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	switch val.Type().Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		result.Type = attrTypeInteger
+		result.Signed = true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		result.Type = attrTypeInteger
+	case reflect.Float32, reflect.Float64:
+		result.Type = attrTypeFloat
+	case reflect.Bool:
+		result.Type = attrTypeBoolean
+	case reflect.String:
+		result.Type = attrTypeString
+	case reflect.Array, reflect.Slice:
+		result.Type = attrTypeArray
+		newType := reflect.Indirect(reflect.New(val.Type().Elem()))
+		if newType.Kind() == reflect.Ptr && newType.IsNil() {
+			newType.Set(reflect.New(newType.Type().Elem()))
+		}
+		elem, err := inspect(newType.Interface(), cache)
+		if err != nil {
+			return nil, err
+		}
+		elem.Name = val.Type().Elem().String()
+		result.Elem = elem
+	case reflect.Struct:
+		result.Type = attrTypeStruct
+
+		// TODO: peek into cache, if enabled with 2 same fields, it will issue
+		// TODO: recursive structures still not supported
+		//if cached, ok := cache[originalType]; ok {
+		//	return cached, nil
+		//}
+
+		// cache schema for this type to avoid infinite recursion
+		cache[originalType] = result
+
+		// prepare all props
+		result.Properties = make(map[string]*attr)
+
+		// iterate over struct fields
+		for i := 0; i < val.NumField(); i++ {
+			field := val.Field(i)
+			fieldType := val.Type().Field(i)
+
+			// skip unexported fields
+			if !fieldType.IsExported() {
+				continue
+			}
+
+			var newValue any
+
+			// prepare new value for field, so we can inspect it
+			if field.Type().Kind() == reflect.Ptr {
+				newValue = reflect.Indirect(reflect.New(field.Type().Elem())).Interface()
+			} else {
+				newValue = reflect.Indirect(reflect.New(field.Type())).Interface()
+			}
+
+			// field attribute returned from inspect
+			fieldAttr, err := inspect(newValue, cache)
+			if err != nil {
+				return nil, err
+			}
+
+			// parse attribs tag first
+			pa, err := parseAttribsTag(fieldType.Tag.Get(TagName))
+			if err != nil {
+				return nil, err
+			}
+
+			// skip disabled fields
+			if pa.Disabled {
+				continue
+			}
+
+			// Support for embedded structs
+			if fieldType.Anonymous {
+				fieldAttr.Name = fieldType.Type.Name()
+
+				// merge properties from embedded struct to current struct
+				// this is a naive way, since we don't store whole tree of embedded structs to set values.
+				// this is prone to duplicates
+				for name, prop := range fieldAttr.Properties {
+					if _, ok := result.Properties[name]; ok {
+						return nil, fmt.Errorf("%w: %v", ErrDuplicateField, name)
+					}
+
+					// naive way
+					result.Properties[name] = prop
+				}
+			}
+
+			// names and aliases
+			fieldAttr.Name = fieldType.Name
+			fieldAttr.Alias = pa.Alias
+			if fieldAttr.Alias == "" {
+				fieldAttr.Alias = fieldAttr.Name
+			}
+
+			// add field attribute to struct properties
+			result.Properties[fieldAttr.Alias] = fieldAttr
+		}
+
+	}
+
+	return result, nil
+}
+
+// attr implementation
+// it holds any supported attribute
+type attr struct {
 	Name     string
 	Alias    string
-	Disabled bool
 	Nullable bool
+	Type     attrType
+
+	// integer and float types
+	//Width int
+
+	// integer type
+	Signed bool
+
+	// array/slice
+	Elem *attr
+
+	// struct properties
+	Properties map[string]*attr
 }
 
-// Init is base for all embeddees
-func (b baseAttribute) Init(value reflect.Type, cache Cache) error { return nil }
-
-type structAttribute struct {
-	baseAttribute
-	fields map[string]attrInfo
-}
-
-type attrInfo struct {
-	attr Attribute
-	base baseAttribute
-}
-
-// Init initializes Attribute with given value and tag
-func (s *structAttribute) Init(typ reflect.Type, cache Cache) error {
-	// init fields
-	if s.fields == nil {
-		s.fields = map[string]attrInfo{}
+// Set sets value to given target from parser.
+// it returns error if value cannot be set or parsed attribute is invalid
+func (a *attr) Set(target reflect.Value, parsed *parser.Attribute) error {
+	// check if pointer is not nil, we need to provide new value
+	if target.Kind() == reflect.Ptr && target.IsNil() {
+		target.Set(reflect.New(target.Type().Elem()))
 	}
 
-	// iterate over all fields
-	for i := 0; i < typ.NumField(); i++ {
-		ft := typ.Field(i)
-		ftType := ft.Type
-		if ft.PkgPath != "" {
-			continue
-		}
-		// support for embedded structs
-		if ft.Anonymous {
-			if err := s.Init(ftType, cache); err != nil {
+	switch a.Type {
+	case attrTypeArray:
+		return a.setArray(target, parsed)
+	case attrTypeBoolean:
+		return a.setBoolean(target, parsed)
+	case attrTypeFloat:
+		return a.setFloat(target, parsed)
+	case attrTypeInteger:
+		return a.setInteger(target, parsed)
+	case attrTypeString:
+		return a.setString(target, parsed)
+	case attrTypeStruct:
+		for _, att := range parsed.Attributes {
+			prop, ok := a.Properties[att.Name]
+			if !ok {
+				return parser.NewParseError(att.Position, "unknown attribute %s", att.Name)
+			}
+			var field reflect.Value
+			if target.Kind() == reflect.Ptr {
+				field = target.Elem().FieldByName(prop.Name)
+			} else {
+				field = target.FieldByName(prop.Name)
+			}
+
+			// set property
+			if err := prop.Set(field, &att); err != nil {
 				return err
 			}
-			continue
 		}
-
-		// parse attribs tag first
-		pa, err := parseAttribsTag(ft.Tag.Get(TagName))
-		if err != nil {
-			return err
-		}
-		base := baseAttribute{
-			Name:     ft.Name,
-			Alias:    pa.Alias,
-			Disabled: pa.Disabled,
-		}
-		if base.Alias == "" {
-			base.Alias = base.Name
-		}
-		if ftType.Kind() == reflect.Ptr {
-			ftType = ftType.Elem()
-			base.Nullable = true
-		}
-
-		p, err := define(ftType, base, cache)
-		if err != nil {
-			return err
-		}
-		s.fields[base.Alias] = attrInfo{
-			attr: p,
-			base: base,
-		}
+	default:
+		return parser.NewParseError(parsed.Position, "invalid attribute type %d", a.Type)
 	}
 
 	return nil
 }
 
-// SetValue sets value for given attribute
-func (s *structAttribute) SetValue(result reflect.Value, attr *parser.Attribute) error {
-	// check if we have proper value (attributes - struct)
-	if attr.Attributes == nil {
-		return parser.NewParseError(attr.Position, "invalid value for %s", attr.Name)
-	}
-	if !result.CanSet() {
-		return fmt.Errorf("cannot set value for struct %s", attr.Name)
+func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute) error {
+	if parsed.Array == nil {
+		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
 	}
 
-	if result.Type().Kind() == reflect.Ptr {
-		result.Set(reflect.New(result.Type().Elem()))
+	if target.Kind() == reflect.Ptr {
+		target = target.Elem()
 	}
 
-	for _, att := range attr.Attributes {
-		sa, ok := s.fields[att.Name]
-		if !ok {
-			return parser.NewParseError(attr.Position, "unknown attribute %s", att.Name)
-		}
-
-		var field reflect.Value
-		if result.Kind() == reflect.Ptr {
-			field = result.Elem().FieldByName(sa.base.Name)
-		} else {
-			field = result.FieldByName(sa.base.Name)
-		}
-		if err := sa.attr.SetValue(field, &att); err != nil {
-			return err
-		}
+	nu := reflect.Indirect(reflect.New(target.Type()))
+	if nu.Kind() == reflect.Ptr && nu.IsNil() {
+		nu.Set(reflect.New(nu.Type().Elem()))
 	}
+
+	// iterate over all values and set one by one
+	for _, item := range parsed.Array {
+		val := reflect.Indirect(reflect.New(target.Type().Elem()))
+		if err := a.Elem.Set(val, &item); err != nil {
+			return fmt.Errorf("cannot set array value for %s: %s", parsed.Name, err)
+		}
+		nu = reflect.Append(nu, val)
+	}
+
+	target.Set(nu)
 
 	return nil
 }
 
-// Item is no op
-func (*structAttribute) Item() (*parser.Attribute, bool) {
-	return nil, false
-}
-
-// intAttribute handles numbers
-type intAttribute struct {
-	baseAttribute
-	width    int
-	unsigned bool
-}
-
-// Item is no op
-func (*intAttribute) Item() (*parser.Attribute, bool) {
-	return nil, false
-}
-
-func (i *intAttribute) SetValue(result reflect.Value, attr *parser.Attribute) error {
-	if attr.Value == nil || attr.Value.Number == nil {
-		return parser.NewParseError(attr.Position, "invalid value for %s", attr.Name)
-	}
-	if !result.CanSet() {
-		return parser.NewParseError(attr.Position, "cannot set value for %s", attr.Name)
+func (a *attr) setBoolean(target reflect.Value, parsed *parser.Attribute) error {
+	if parsed.Value == nil || parsed.Value.Boolean == nil {
+		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
 	}
 
-	if i.unsigned {
-		if value, err := strconv.ParseUint(*attr.Value.Number, 10, i.width); err != nil {
-			return err
-		} else {
-			if result.Kind() == reflect.Ptr {
-				result.Set(reflect.New(result.Type().Elem()))
-				result.Elem().SetUint(value)
-			} else {
-				result.SetUint(value)
-			}
-		}
-	} else {
-		if value, err := strconv.ParseInt(*attr.Value.Number, 10, i.width); err != nil {
-			return err
-		} else {
-			if result.Kind() == reflect.Ptr {
-				result.Set(reflect.New(result.Type().Elem()))
-				result.Elem().SetInt(value)
-			} else {
-				result.SetInt(value)
-			}
-		}
-	}
-
-	return nil
-}
-
-type floatAttribute struct {
-	baseAttribute
-	width int
-}
-
-func (f *floatAttribute) SetValue(result reflect.Value, attr *parser.Attribute) error {
-	if attr.Value == nil || attr.Value.Number == nil {
-		return parser.NewParseError(attr.Position, "invalid value for %s", attr.Name)
-	}
-	if !result.CanSet() {
-		return parser.NewParseError(attr.Position, "cannot set value for %s", attr.Name)
-	}
-	if value, err := strconv.ParseFloat(*attr.Value.Number, f.width); err != nil {
-		return parser.NewParseError(attr.Position, "invalid value for %s", attr.Name)
-	} else {
-		if result.Kind() == reflect.Ptr {
-			result.Set(reflect.New(result.Type().Elem()))
-			result.Elem().SetFloat(value)
-		} else {
-			result.SetFloat(value)
-		}
-	}
-	return nil
-}
-
-// Item is no op
-func (*floatAttribute) Item() (*parser.Attribute, bool) {
-	return nil, false
-}
-
-type boolAttribute struct {
-	baseAttribute
-}
-
-func (b *boolAttribute) SetValue(result reflect.Value, attr *parser.Attribute) error {
-	if attr.Value == nil || attr.Value.Boolean == nil {
-		return parser.NewParseError(attr.Position, "invalid value for %s", attr.Name)
-	}
-	if !result.CanSet() {
-		return parser.NewParseError(attr.Position, "cannot set value for %s", attr.Name)
-	}
-
-	val := *attr.Value.Boolean
+	val := *parsed.Value.Boolean
 
 	if val != "true" && val != "false" {
-		return parser.NewParseError(attr.Position, "invalid value for %s", attr.Name)
+		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
 	}
 
 	// we know it's correct
 	value, _ := strconv.ParseBool(val)
 
-	if result.Kind() == reflect.Ptr {
-		result.Set(reflect.New(result.Type().Elem()))
-		result.Elem().SetBool(value)
-	} else {
-		result.SetBool(value)
-	}
+	target.SetBool(value)
 
 	return nil
 }
 
-// Item is no op
-func (*boolAttribute) Item() (*parser.Attribute, bool) {
-	return nil, false
-}
-
-type stringAttribute struct {
-	baseAttribute
-}
-
-func (s *stringAttribute) SetValue(result reflect.Value, attr *parser.Attribute) error {
-	if attr.Value == nil || attr.Value.String == nil {
-		return parser.NewParseError(attr.Position, "invalid value for %s", attr.Name)
+func (a *attr) setFloat(target reflect.Value, parsed *parser.Attribute) error {
+	if parsed.Value == nil || parsed.Value.Number == nil {
+		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
 	}
-	if !result.CanSet() {
-		return parser.NewParseError(attr.Position, "cannot set value for %s", attr.Name)
-	}
-
-	if result.Kind() == reflect.Ptr {
-		result.Set(reflect.New(result.Type().Elem()))
-		result.Elem().SetString(*attr.Value.String)
+	if value, err := strconv.ParseFloat(*parsed.Value.Number, 64); err != nil {
+		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
 	} else {
-		result.SetString(*attr.Value.String)
+		target.SetFloat(value)
 	}
-
 	return nil
+
 }
 
-// Item is no op
-func (*stringAttribute) Item() (*parser.Attribute, bool) {
-	return nil, false
-}
-
-type arrayAttribute struct {
-	baseAttribute
-	attr    Attribute
-	itemTyp reflect.Type
-}
-
-// Init initializes arrayAttribute with proper Attribute
-func (a *arrayAttribute) Init(typ reflect.Type, cache Cache) (err error) {
-	a.attr, err = define(typ.Elem(), baseAttribute{}, cache)
-	a.itemTyp = typ.Elem()
-	return
-}
-
-// SetValue iterates over array values and sets them
-func (a *arrayAttribute) SetValue(result reflect.Value, attr *parser.Attribute) error {
-	if attr.Array == nil {
-		return parser.NewParseError(attr.Position, "invalid value for %s", attr.Name)
-	}
-	if !result.CanSet() {
-		return parser.NewParseError(attr.Position, "cannot set value for %s", attr.Name)
+func (a *attr) setInteger(target reflect.Value, parsed *parser.Attribute) error {
+	if parsed.Value == nil || parsed.Value.Number == nil {
+		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
 	}
 
-	nu := reflect.New(result.Type()).Elem()
+	if target.Kind() == reflect.Ptr {
+		target = target.Elem()
+	}
 
-	for _, item := range attr.Array {
-		val := reflect.Indirect(reflect.New(a.itemTyp))
-		if err := a.attr.SetValue(val, &item); err != nil {
-			return fmt.Errorf("cannot set array value for %s: %s", attr.Name, err)
+	if a.Signed {
+		val, err := strconv.ParseInt(*parsed.Value.Number, 10, 64)
+		if err != nil {
+			return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
 		}
-		nu = reflect.Append(nu, val)
+		target.SetInt(val)
+	} else {
+		val, err := strconv.ParseUint(*parsed.Value.Number, 10, 64)
+		if err != nil {
+			return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+		}
+		target.SetUint(val)
 	}
-
-	result.Set(nu)
-
 	return nil
 }
 
-func (a *arrayAttribute) Item() (*parser.Attribute, bool) {
-	panic("here")
-	return nil, false
+func (a *attr) setString(target reflect.Value, parsed *parser.Attribute) error {
+	if parsed.Value == nil || parsed.Value.String == nil {
+		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+	}
+	if target.Kind() == reflect.Ptr {
+		target = target.Elem()
+	}
+
+	target.SetString(*parsed.Value.String)
+
+	return nil
 }
