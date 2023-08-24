@@ -240,4 +240,62 @@ func TestAttrs(t *testing.T) {
 		}
 
 	})
+
+	t.Run("test embedded struct", func(t *testing.T) {
+		type Inside struct {
+			Hello string `attr:"name=hello"`
+			World string `attr:"name=world"`
+		}
+		type Span struct {
+			Inside
+			Start int `attr:"name=start"`
+			End   int `attr:"name=end"`
+		}
+		type Field struct {
+			Name     string `attr:"name=name"`
+			Required bool   `attr:"name=required"`
+			Span
+		}
+
+		defined, err := attribs.New(Field{})
+		assert.NoError(t, err)
+
+		for _, item := range []struct {
+			input       string
+			expected    Field
+			errExpected string
+		}{
+			{
+				input: "name = 'this is the name'",
+				expected: Field{
+					Name:     "this is the name",
+					Required: false,
+				},
+			},
+			{
+				input: "name = 'this is the name', start=42, end=1024, hello='hello', world='world'",
+				expected: Field{
+					Name:     "this is the name",
+					Required: false,
+					Span: Span{
+						Inside: Inside{
+							Hello: "hello",
+							World: "world",
+						},
+						Start: 42,
+						End:   1024,
+					},
+				},
+			},
+		} {
+			value, err := defined.Parse(item.input)
+			if item.errExpected != "" {
+				assert.NotNil(t, err)
+				assert.Contains(t, err.Error(), item.errExpected)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, item.expected, value)
+			}
+		}
+	})
 }
