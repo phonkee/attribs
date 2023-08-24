@@ -1,9 +1,8 @@
-package attribs_test
+package attribs
 
 import (
 	"testing"
 
-	"github.com/phonkee/attribs"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -121,7 +120,7 @@ func TestAttrs(t *testing.T) {
 				},
 			},
 		} {
-			defined, err := attribs.New(AttrDef{})
+			defined, err := New(AttrDef{})
 			assert.NoError(t, err)
 
 			value, err := defined.Parse(item.input)
@@ -208,7 +207,7 @@ func TestAttrs(t *testing.T) {
 				},
 			},
 		} {
-			defined, err := attribs.New(AttrDef{})
+			defined, err := New(AttrDef{})
 			assert.NoError(t, err)
 
 			value, err := defined.Parse(item.input)
@@ -222,7 +221,7 @@ func TestAttrs(t *testing.T) {
 		}
 	})
 	t.Run("test pointer", func(t *testing.T) {
-		defined, err := attribs.New(AttrDef{})
+		defined, err := New(AttrDef{})
 		assert.NoError(t, err)
 
 		for _, item := range []struct {
@@ -290,7 +289,7 @@ func TestAttrs(t *testing.T) {
 			},
 			},
 		} {
-			defined, err := attribs.New(Example{})
+			defined, err := New(Example{})
 			assert.NoError(t, err)
 			value, err := defined.Parse(item.input)
 			if item.errExpected != "" {
@@ -314,7 +313,7 @@ func TestAttrs(t *testing.T) {
 			Span     *Span  `attr:"name=span"`
 		}
 
-		defined, err := attribs.New(Field{})
+		defined, err := New(Field{})
 		assert.NoError(t, err)
 
 		for _, item := range []struct {
@@ -376,7 +375,7 @@ func TestAttrs(t *testing.T) {
 			Span
 		}
 
-		defined, err := attribs.New(Field{})
+		defined, err := New(Field{})
 		assert.NoError(t, err)
 
 		for _, item := range []struct {
@@ -421,5 +420,11 @@ func TestAttrs(t *testing.T) {
 				assert.Equal(t, item.expected, value)
 			}
 		}
+	})
+}
+
+func TestAttrsMust(t *testing.T) {
+	assert.NotPanics(t, func() {
+		Must(New(AttrDef{}))
 	})
 }

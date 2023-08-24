@@ -11,12 +11,11 @@ const (
 )
 
 // Must !
-func Must[T any](init func() (Definition[T], error)) Definition[T] {
-	result, err := init()
+func Must[T any](t Definition[T], err error) Definition[T] {
 	if err != nil {
 		panic(err)
 	}
-	return result
+	return t
 }
 
 // New analyzes given struct and returns definition. definition can then parse tags and returns values
