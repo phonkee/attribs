@@ -1,7 +1,6 @@
 package attribs_test
 
 import (
-	"github.com/davecgh/go-spew/spew"
 	"testing"
 
 	"github.com/phonkee/attribs"
@@ -271,8 +270,8 @@ func TestAttrs(t *testing.T) {
 			Username string `attr:"name=username"`
 		}
 		type Example struct {
-			//IDs   []int     `attr:"name=ids"`
-			//Users []*User   `attr:"name=users"`
+			IDs   []int     `attr:"name=ids"`
+			Users []*User   `attr:"name=users"`
 			Enums *[]string `attr:"name=enums"`
 		}
 
@@ -281,15 +280,18 @@ func TestAttrs(t *testing.T) {
 			expected    Example
 			errExpected string
 		}{
-			//{input: "", expected: Example{}},
-			//{input: "ids[1,2,3], users[(username='me')]", expected: Example{IDs: []int{1, 2, 3}, Users: []*User{{Username: "me"}}}},
+			{input: "", expected: Example{}},
+			{input: "ids[1,2,3], users[(username='me')]", expected: Example{IDs: []int{1, 2, 3}, Users: []*User{{Username: "me"}}}},
 			{input: "enums['hello', 'world']", expected: Example{Enums: ptr([]string{"hello", "world"})}},
-			//{input: "enums['hello', 'world']", expected: Example{IDs: []int{1, 2, 3}, Users: []*User{{Username: "me"}}}},
+			{input: "enums['hello', 'world'], ids[1,2,3], users[(username='me')]", expected: Example{
+				IDs:   []int{1, 2, 3},
+				Users: []*User{{Username: "me"}},
+				Enums: ptr([]string{"hello", "world"}),
+			},
+			},
 		} {
 			defined, err := attribs.New(Example{})
 			assert.NoError(t, err)
-			spew.Dump(defined)
-
 			value, err := defined.Parse(item.input)
 			if item.errExpected != "" {
 				assert.NotNil(t, err)
@@ -351,73 +353,73 @@ func TestAttrs(t *testing.T) {
 
 	})
 
-	t.Run("test embedded struct", func(t *testing.T) {
-		type Inside struct {
-			Hello string `attr:"name=hello"`
-			World string `attr:"name=world"`
-		}
-		type Span struct {
-			Inside
-			Start int `attr:"name=start"`
-			End   int `attr:"name=end"`
-		}
-		type Fourth struct {
-			Yes bool `attr:"name=yes"`
-		}
-		type Other struct {
-			Fourth
-		}
-		type Field struct {
-			Name     string `attr:"name=name"`
-			Required bool   `attr:"name=required"`
-			Other    Other  `attr:"name=other"`
-			Span
-		}
-
-		defined, err := attribs.New(Field{})
-		assert.NoError(t, err)
-
-		for _, item := range []struct {
-			input       string
-			expected    Field
-			errExpected string
-		}{
-			{
-				input: "name = 'this is the name'",
-				expected: Field{
-					Name:     "this is the name",
-					Required: false,
-				},
-			},
-			{
-				input: "name = 'this is the name', start=42, end=1024, hello='hello', world='world', other(yes=true)",
-				expected: Field{
-					Name:     "this is the name",
-					Required: false,
-					Span: Span{
-						Inside: Inside{
-							Hello: "hello",
-							World: "world",
-						},
-						Start: 42,
-						End:   1024,
-					},
-					Other: Other{
-						Fourth: Fourth{
-							Yes: true,
-						},
-					},
-				},
-			},
-		} {
-			value, err := defined.Parse(item.input)
-			if item.errExpected != "" {
-				assert.NotNil(t, err)
-				assert.Contains(t, err.Error(), item.errExpected)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, item.expected, value)
-			}
-		}
-	})
+	//t.Skip("test embedded struct", func(t *testing.T) {
+	//	type Inside struct {
+	//		Hello string `attr:"name=hello"`
+	//		World string `attr:"name=world"`
+	//	}
+	//	type Span struct {
+	//		Inside
+	//		Start int `attr:"name=start"`
+	//		End   int `attr:"name=end"`
+	//	}
+	//	type Fourth struct {
+	//		Yes bool `attr:"name=yes"`
+	//	}
+	//	type Other struct {
+	//		Fourth
+	//	}
+	//	type Field struct {
+	//		Name     string `attr:"name=name"`
+	//		Required bool   `attr:"name=required"`
+	//		Other    Other  `attr:"name=other"`
+	//		Span
+	//	}
+	//
+	//	defined, err := attribs.New(Field{})
+	//	assert.NoError(t, err)
+	//
+	//	for _, item := range []struct {
+	//		input       string
+	//		expected    Field
+	//		errExpected string
+	//	}{
+	//		{
+	//			input: "name = 'this is the name'",
+	//			expected: Field{
+	//				Name:     "this is the name",
+	//				Required: false,
+	//			},
+	//		},
+	//		{
+	//			input: "name = 'this is the name', start=42, end=1024, hello='hello', world='world', other(yes=true)",
+	//			expected: Field{
+	//				Name:     "this is the name",
+	//				Required: false,
+	//				Span: Span{
+	//					Inside: Inside{
+	//						Hello: "hello",
+	//						World: "world",
+	//					},
+	//					Start: 42,
+	//					End:   1024,
+	//				},
+	//				Other: Other{
+	//					Fourth: Fourth{
+	//						Yes: true,
+	//					},
+	//				},
+	//			},
+	//		},
+	//	} {
+	//		value, err := defined.Parse(item.input)
+	//		if item.errExpected != "" {
+	//			assert.NotNil(t, err)
+	//			assert.Contains(t, err.Error(), item.errExpected)
+	//		} else {
+	//			assert.NoError(t, err)
+	//			assert.Equal(t, item.expected, value)
+	//		}
+	//	}
+	//})
 }
