@@ -53,8 +53,9 @@ Currently supported (tested) types are
 - uint, uint8, uint16, uint32, uint64  (and pointers)
 - string  (and pointers)
 - bool  (and pointers)
-- struct  (and pointers)
-- array
+- float32, float64  (and pointers)
+- structs (embedded) (and pointers)
+- array (and pointers)
 
 # Author
 

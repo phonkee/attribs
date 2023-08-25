@@ -58,7 +58,8 @@ func (d Definition[T]) Parse(input string) (T, error) {
 	// prepare settable value
 	val := reflect.Indirect(reflect.ValueOf(result))
 
-	//// create new value from given parsed attributes
+	// create new value from given parsed attributes
+	// TODO: add ignore argument that ignores unknown attributes
 	err = d.attr.Set(val, &parser.Attribute{Attributes: attrs})
 	if err != nil {
 		return *result, err
