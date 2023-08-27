@@ -24,7 +24,7 @@ func New[T any](what T) (result Definition[T], _ error) {
 	// now we go over all fields and check which are used
 	typ := reflect.TypeOf(what)
 
-	if typ.Kind() != reflect.Struct {
+	if typ == nil || typ.Kind() != reflect.Struct {
 		return result, ErrNotStruct
 	}
 

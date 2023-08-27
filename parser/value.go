@@ -45,14 +45,17 @@ func (v Value) BuildValue() (reflect.Value, error) {
 			target.SetFloat(r)
 			return target, nil
 		}
-		target := reflect.Indirect(reflect.New(reflect.TypeOf(r)))
+		typ := reflect.TypeOf(int(0))
+		target := reflect.Indirect(reflect.New(typ))
 		if !target.CanSet() {
 			// TODO: remove this
 			panic("cannot set int value")
 		}
+		target.SetInt(r)
 		return target, nil
 	case v.String != nil:
-		target := reflect.Indirect(reflect.New(reflect.TypeOf(*v.String)))
+		typ := reflect.TypeOf(*v.String)
+		target := reflect.Indirect(reflect.New(typ))
 		if !target.CanSet() {
 			panic("cannot set string value")
 		}

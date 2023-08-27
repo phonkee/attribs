@@ -28,7 +28,9 @@ func (a *Attribute) Build() (reflect.Value, error) {
 	case a.Value != nil:
 		return a.Value.BuildValue()
 	case a.Attributes != nil:
-		newValue := reflect.MakeMapWithSize(reflect.TypeOf(map[string]any{}), len(a.Attributes))
+		mt := reflect.MapOf(reflect.TypeOf(""), reflect.TypeOf((*any)(nil)).Elem())
+		newValue := reflect.MakeMapWithSize(mt, 0)
+
 		for _, attr := range a.Attributes {
 			value, err := attr.Build()
 			if err != nil {
@@ -36,6 +38,7 @@ func (a *Attribute) Build() (reflect.Value, error) {
 			}
 			newValue.SetMapIndex(reflect.ValueOf(attr.Name), value)
 		}
+
 		return newValue, nil
 	case a.Array != nil:
 		newValue := reflect.MakeSlice(reflect.TypeOf([]any{}), 0, len(a.Array))

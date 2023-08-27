@@ -311,6 +311,7 @@ func TestAttrs(t *testing.T) {
 			Name     string `attr:"name=name"`
 			Required bool   `attr:"name=required"`
 			Span     *Span  `attr:"name=span"`
+			SomeAny  any    `attr:"name=some_any"`
 		}
 
 		defined, err := New(Field{})
@@ -350,6 +351,54 @@ func TestAttrs(t *testing.T) {
 			}
 		}
 
+	})
+
+	t.Run("test any", func(t *testing.T) {
+		type Struct struct {
+			Any any `attr:"name=any"`
+		}
+		defined, err := New(Struct{})
+		assert.NoError(t, err)
+
+		for _, item := range []struct {
+			input  string
+			err    error
+			expect Struct
+		}{
+			{
+				input: "any=42",
+				expect: Struct{
+					Any: 42,
+				},
+			},
+			{
+				input: "any='hello'",
+				expect: Struct{
+					Any: "hello",
+				},
+			},
+			{
+				input: "any",
+				expect: Struct{
+					Any: true,
+				},
+			},
+			{
+				input: "any=3.141592653",
+				expect: Struct{
+					Any: 3.141592653,
+				},
+			},
+		} {
+			value, err := defined.Parse(item.input)
+			if item.err != nil {
+				assert.NotNil(t, err)
+				assert.ErrorIs(t, err, item.err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, item.expect, value)
+			}
+		}
 	})
 
 	t.Run("test embedded struct", func(t *testing.T) {
@@ -452,38 +501,46 @@ func TestAttrs(t *testing.T) {
 				}
 			}
 		})
-		t.Run("test any", func(t *testing.T) {
-			type Test struct {
-				Metadata map[string]any `attr:"name=metadata"`
-			}
-			def, err := New(Test{})
-			assert.NoError(t, err)
-			assert.NotNil(t, def)
 
-			data := []struct {
-				input    string
-				expected Test
-				err      error
-			}{
-				{input: "", expected: Test{}},
-				{input: "metadata()", expected: Test{Metadata: map[string]any{}}},
-				{input: "metadata(hello='world', priority=42)", expected: Test{Metadata: map[string]any{
-					"hello":    "world",
-					"priority": 42,
-				}}},
-			}
+	})
 
-			for _, item := range data {
-				value, err := def.Parse(item.input)
-				if item.err != nil {
-					assert.ErrorIs(t, err, item.err)
-				} else {
-					assert.NoError(t, err)
-					assert.Equal(t, item.expected, value)
-				}
-			}
+	t.Run("test any", func(t *testing.T) {
+		type Test struct {
+			Metadata  map[string]any `attr:"name=metadata"`
+			Metadatas []any          `attr:"name=metadatas"`
+			Field     any            `attr:"name=field"`
+		}
+		def, err := New(Test{})
+		assert.NoError(t, err)
+		assert.NotNil(t, def)
 
-		})
+		data := []struct {
+			input    string
+			expected Test
+			err      error
+		}{
+			{input: "", expected: Test{}},
+			{input: "metadata()", expected: Test{Metadata: map[string]any{}}},
+			{input: "metadata(hello='world', priority=42)", expected: Test{Metadata: map[string]any{
+				"hello":    "world",
+				"priority": 42,
+			}}},
+			{input: "field=1", expected: Test{Field: 1}},
+			{input: "field=true", expected: Test{Field: true}},
+			{input: "field", expected: Test{Field: true}},
+			{input: "field='world'", expected: Test{Field: "world"}},
+		}
+
+		for _, item := range data {
+			value, err := def.Parse(item.input)
+			if item.err != nil {
+				assert.ErrorIs(t, err, item.err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, item.expected, value)
+			}
+		}
+
 	})
 }
 
