@@ -56,6 +56,7 @@ Currently supported (tested) types are
 - float32, float64  (and pointers)
 - structs (embedded) (and pointers)
 - array (and pointers)
+- map (and pointers to map) with string key to any supported type  
 
 # Author
 

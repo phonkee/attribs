@@ -17,6 +17,8 @@ const (
 	attrTypeStruct
 	attrTypeArray
 	attrTypeBoolean
+	attrTypeMap
+	attrTypeAny // any type is only supported in map, otherwise is impossible to get this type from inspect (since we pass values)
 )
 
 func (a attrType) String() string {
@@ -40,6 +42,7 @@ func (a attrType) String() string {
 }
 
 // inspect given value and return attribute
+// TODO: cache is not supported yet
 func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 	if _, ok := what.(reflect.Type); ok {
 		panic("passing type to inspect is not supported")
@@ -96,7 +99,9 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 		//}
 
 		// cache schema for this type to avoid infinite recursion
-		cache[originalType] = result
+		if cache != nil {
+			cache[originalType] = result
+		}
 
 		// prepare all props
 		result.Properties = make(map[string]*attr)
@@ -164,7 +169,43 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 			// add field attribute to struct properties
 			result.Properties[fieldAttr.Alias] = fieldAttr
 		}
+	case reflect.Map:
+		result.Type = attrTypeMap
+		// TODO: implement this
 
+		// now check if key is string, because we support only string keys
+		if val.Type().Key() != reflect.TypeOf("") {
+			return nil, fmt.Errorf("%w: %s", ErrMapKeyNotStr, val.Type().Key().String())
+		}
+
+		// inspect value type
+		elemType := val.Type().Elem()
+
+		// first we will check for any
+		if elemType.Kind() == reflect.Interface {
+			result.Elem = &attr{
+				Type: attrTypeAny,
+			}
+			break
+		}
+
+		// prepare new value for field, so we can inspect it
+		newValue := func() any {
+			if elemType.Kind() == reflect.Ptr {
+				return reflect.Indirect(reflect.New(elemType.Elem())).Interface()
+			} else {
+				return reflect.Indirect(reflect.New(elemType)).Interface()
+			}
+		}()
+
+		// field attribute returned from inspect
+		elemAttr, err := inspect(newValue, cache)
+		if err != nil {
+			return nil, err
+		}
+		result.Elem = elemAttr
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedType, val.Type().String())
 	}
 
 	return result, nil
@@ -184,7 +225,7 @@ type attr struct {
 	// integer type
 	Signed bool
 
-	// array/slice
+	// array/slice/map
 	Elem *attr
 
 	// struct properties

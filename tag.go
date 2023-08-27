@@ -29,7 +29,7 @@ func parseAttribsTag(tag string) (result attrAttribs, _ error) {
 				return result, fmt.Errorf("invalid name: %w", ErrInvalidTag)
 			}
 			result.Alias = *attr.Value.String
-		case "disabled":
+		case "disabled": // TODO: check if it's not number or any other type (right now it naively set disabled to true)
 			if attr.Value == nil || attr.Value.String == nil {
 				b, err := strconv.ParseBool(*attr.Value.String)
 				if err != nil {
