@@ -252,28 +252,12 @@ func (a *attr) Set(target reflect.Value, parsed *parser.Attribute) error {
 	case attrTypeString:
 		return a.setString(target, parsed)
 	case attrTypeStruct:
-		for _, att := range parsed.Attributes {
-			prop, ok := a.Properties[att.Name]
-			if !ok {
-				return parser.NewParseError(att.Position, "unknown attribute %s", att.Name)
-			}
-			var field reflect.Value
-			if target.Kind() == reflect.Ptr {
-				field = target.Elem().FieldByName(prop.Name)
-			} else {
-				field = target.FieldByName(prop.Name)
-			}
-
-			// set property
-			if err := prop.Set(field, &att); err != nil {
-				return err
-			}
-		}
+		return a.setStruct(target, parsed)
+	case attrTypeMap:
+		return a.setMap(target, parsed)
 	default:
 		return parser.NewParseError(parsed.Position, "invalid attribute type %d", a.Type)
 	}
-
-	return nil
 }
 
 func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute) error {
@@ -361,6 +345,28 @@ func (a *attr) setInteger(target reflect.Value, parsed *parser.Attribute) error 
 	return nil
 }
 
+func (a *attr) setMap(target reflect.Value, parsed *parser.Attribute) error {
+	// check if we really have object type, otherwise it's invalid
+	if parsed.Attributes == nil {
+		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+	}
+
+	// check if target is nil (map is not initialized)
+	if target.Kind() == reflect.Map && target.IsNil() {
+		target.Set(reflect.MakeMap(target.Type()))
+	}
+
+	// special case for any type
+	switch a.Elem.Type {
+	case attrTypeAny:
+		// special case for any type, we need to build recursively maps and stuff
+	default:
+
+	}
+
+	return nil
+}
+
 func (a *attr) setString(target reflect.Value, parsed *parser.Attribute) error {
 	if parsed.Value == nil || parsed.Value.String == nil {
 		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
@@ -371,5 +377,27 @@ func (a *attr) setString(target reflect.Value, parsed *parser.Attribute) error {
 
 	target.SetString(*parsed.Value.String)
 
+	return nil
+}
+
+func (a *attr) setStruct(target reflect.Value, parsed *parser.Attribute) error {
+	// TODO: check other than struct types
+	for _, att := range parsed.Attributes {
+		prop, ok := a.Properties[att.Name]
+		if !ok {
+			return parser.NewParseError(att.Position, "unknown attribute %s", att.Name)
+		}
+		var field reflect.Value
+		if target.Kind() == reflect.Ptr {
+			field = target.Elem().FieldByName(prop.Name)
+		} else {
+			field = target.FieldByName(prop.Name)
+		}
+
+		// set property
+		if err := prop.Set(field, &att); err != nil {
+			return err
+		}
+	}
 	return nil
 }

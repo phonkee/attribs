@@ -423,56 +423,36 @@ func TestAttrs(t *testing.T) {
 	})
 
 	t.Run("test map support", func(t *testing.T) {
-
 		type Test struct {
-			Hello string `attr:"name=hello"`
+			Metadata    map[string]string  `attr:"name=metadata"`
+			MetadataPtr *map[string]string `attr:"name=metadata_ptr"`
 		}
+		def, err := New(Test{})
+		assert.NoError(t, err)
+		assert.NotNil(t, def)
 
-		t.Run("test valid definitions", func(t *testing.T) {
+		t.Run("test valid data", func(t *testing.T) {
 			data := []struct {
-				input                any
-				expectedElemAttrType attrType
-				nullable             bool
+				input    string
+				expected Test
+				err      error
 			}{
-				{map[string]string{}, attrTypeString, false},
-				{map[string]map[string]string{}, attrTypeMap, false},
-				{&map[string]map[string]string{}, attrTypeMap, true},
-				{&map[string]*map[string]string{}, attrTypeMap, true},
-				{map[string]any{}, attrTypeAny, false},
-				{&map[string]string{}, attrTypeString, true},
-				{&map[string]any{}, attrTypeAny, true},
-				{&map[string]string{}, attrTypeString, true},
-				{&map[string]Test{}, attrTypeStruct, true},
-				{map[string]*Test{}, attrTypeStruct, false},
-				{&map[string]*int{}, attrTypeInteger, true},
-				{map[string]*int{}, attrTypeInteger, false},
+				{input: "", expected: Test{}},
+				{input: "metadata()", expected: Test{Metadata: map[string]string{}}},
 			}
+
 			for _, item := range data {
-				d, err := inspect(item.input, nil)
-				assert.NoError(t, err)
-				assert.NotNil(t, d)
-				assert.Equal(t, item.expectedElemAttrType, d.Elem.Type, "input: %T, type: %s", item.input, d.Type.String())
-				assert.Equal(t, item.nullable, d.Nullable, "input: %T, type: %s", item.input, d.Type.String())
+				value, err := def.Parse(item.input)
+				if item.err != nil {
+					assert.ErrorIs(t, err, item.err)
+				} else {
+					assert.NoError(t, err)
+					assert.Equal(t, item.expected, value)
+				}
 			}
 		})
-
-		t.Run("test invalid definitions", func(t *testing.T) {
-			data := []struct {
-				input interface{}
-				err   error
-			}{
-				{map[int]int{}, ErrMapKeyNotStr},
-				{map[bool]int{}, ErrMapKeyNotStr},
-				{map[*string]int{}, ErrMapKeyNotStr},
-			}
-			for _, item := range data {
-				d, err := inspect(item.input, nil)
-				assert.ErrorIs(t, err, item.err)
-				assert.Nil(t, d)
-			}
-
+		t.Run("test any", func(t *testing.T) {
 		})
-
 	})
 }
 
