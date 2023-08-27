@@ -423,15 +423,16 @@ func TestAttrs(t *testing.T) {
 	})
 
 	t.Run("test map support", func(t *testing.T) {
-		type Test struct {
-			Metadata    map[string]string  `attr:"name=metadata"`
-			MetadataPtr *map[string]string `attr:"name=metadata_ptr"`
-		}
-		def, err := New(Test{})
-		assert.NoError(t, err)
-		assert.NotNil(t, def)
 
 		t.Run("test valid data", func(t *testing.T) {
+			type Test struct {
+				Metadata    map[string]string  `attr:"name=metadata"`
+				MetadataPtr *map[string]string `attr:"name=metadata_ptr"`
+			}
+			def, err := New(Test{})
+			assert.NoError(t, err)
+			assert.NotNil(t, def)
+
 			data := []struct {
 				input    string
 				expected Test
@@ -452,6 +453,36 @@ func TestAttrs(t *testing.T) {
 			}
 		})
 		t.Run("test any", func(t *testing.T) {
+			type Test struct {
+				Metadata map[string]any `attr:"name=metadata"`
+			}
+			def, err := New(Test{})
+			assert.NoError(t, err)
+			assert.NotNil(t, def)
+
+			data := []struct {
+				input    string
+				expected Test
+				err      error
+			}{
+				{input: "", expected: Test{}},
+				{input: "metadata()", expected: Test{Metadata: map[string]any{}}},
+				{input: "metadata(hello='world', priority=42)", expected: Test{Metadata: map[string]any{
+					"hello":    "world",
+					"priority": 42,
+				}}},
+			}
+
+			for _, item := range data {
+				value, err := def.Parse(item.input)
+				if item.err != nil {
+					assert.ErrorIs(t, err, item.err)
+				} else {
+					assert.NoError(t, err)
+					assert.Equal(t, item.expected, value)
+				}
+			}
+
 		})
 	})
 }

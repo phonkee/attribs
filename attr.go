@@ -66,6 +66,8 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 	}
 
 	switch val.Type().Kind() {
+	case reflect.Interface:
+		result.Type = attrTypeAny
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		result.Type = attrTypeInteger
 		result.Signed = true
@@ -260,6 +262,16 @@ func (a *attr) Set(target reflect.Value, parsed *parser.Attribute) error {
 	}
 }
 
+func (a *attr) setAny(target reflect.Value, parsed *parser.Attribute) error {
+	newValue, err := parsed.Build()
+	if err != nil {
+		return err
+	}
+	target.Set(newValue)
+
+	return nil
+}
+
 func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute) error {
 	if parsed.Array == nil {
 		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
@@ -360,6 +372,10 @@ func (a *attr) setMap(target reflect.Value, parsed *parser.Attribute) error {
 	switch a.Elem.Type {
 	case attrTypeAny:
 		// special case for any type, we need to build recursively maps and stuff
+		target := reflect.Indirect(reflect.New(reflect.TypeOf((*any)(nil)).Elem()))
+		if err := a.setAny(target, parsed); err != nil {
+			return err
+		}
 	default:
 
 	}
