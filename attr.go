@@ -10,7 +10,6 @@ import (
 type attrType string
 
 const (
-	attrTypeInvalid attrType = "invalid"
 	attrTypeInteger attrType = "integer"
 	attrTypeString  attrType = "string"
 	attrTypeFloat   attrType = "float"
