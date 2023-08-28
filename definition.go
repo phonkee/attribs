@@ -20,7 +20,6 @@ func Must[T any](t Definition[T], err error) Definition[T] {
 
 // New analyzes given struct and returns definition. definition can then parse tags and returns values
 // If something fails, this function panics
-// TODO: Add support for pointers to struct
 func New[T any](what T) (result Definition[T], _ error) {
 	// now we go over all fields and check which are used
 	typ := reflect.TypeOf(what)
