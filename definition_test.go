@@ -572,6 +572,11 @@ func TestAttrs(t *testing.T) {
 					ID: 42,
 				}}},
 			}},
+			{input: "structs[[()]]", expected: Test{
+				Structs: [][]*Struct{{{
+					ID: 0,
+				}}},
+			}},
 		}
 
 		for _, item := range data {
@@ -583,9 +588,7 @@ func TestAttrs(t *testing.T) {
 				assert.Equal(t, item.expected, value)
 			}
 		}
-
 	})
-
 }
 
 func TestAttrsMust(t *testing.T) {
