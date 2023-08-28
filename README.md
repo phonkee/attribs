@@ -20,6 +20,8 @@ Attribs defines following grammar for attributes
 * `[key='value']` - object
 * `()` - array
 
+Warning! Top level object must be an object (or pointer to object).
+
 We will show full example
 
 # Example
@@ -55,7 +57,7 @@ func init() {
 
 func main() {
 	// now parse example attributes definition
-	result, _ := d.Parse("default=42, readonly, description='This is a description', tags('tag1', 'tag2'), inner[hello='world']")
+	result, _ := d.Parse("default=42, readonly, description='This is a description', tags['tag1', 'tag2'], inner(hello='world')")
 
 	expected := Tag{
 		DefaultFirst: 42,

@@ -24,9 +24,7 @@ func (v Value) BuildValue() (reflect.Value, error) {
 		}
 		target := reflect.Indirect(reflect.New(reflect.TypeOf(b)))
 		if !target.CanSet() {
-			// TODO: remove this
-			panic("cannot set bool value")
-
+			return reflect.Value{}, NewParseError(v.Position, "cannot set bool value: %s", *v.Boolean)
 		}
 		target.SetBool(b)
 		return target, nil
@@ -39,8 +37,7 @@ func (v Value) BuildValue() (reflect.Value, error) {
 			}
 			target := reflect.Indirect(reflect.New(reflect.TypeOf(r)))
 			if !target.CanSet() {
-				// TODO: remove this
-				panic("cannot set float value")
+				return reflect.Value{}, NewParseError(v.Position, "cannot set float value: %s", *v.Number)
 			}
 			target.SetFloat(r)
 			return target, nil
@@ -48,8 +45,7 @@ func (v Value) BuildValue() (reflect.Value, error) {
 		typ := reflect.TypeOf(int(0))
 		target := reflect.Indirect(reflect.New(typ))
 		if !target.CanSet() {
-			// TODO: remove this
-			panic("cannot set int value")
+			return reflect.Value{}, NewParseError(v.Position, "cannot set int value: %s", *v.Number)
 		}
 		target.SetInt(r)
 		return target, nil
@@ -57,7 +53,7 @@ func (v Value) BuildValue() (reflect.Value, error) {
 		typ := reflect.TypeOf(*v.String)
 		target := reflect.Indirect(reflect.New(typ))
 		if !target.CanSet() {
-			panic("cannot set string value")
+			return reflect.Value{}, NewParseError(v.Position, "cannot set string value: %s", *v.String)
 		}
 		target.SetString(*v.String)
 		return target, nil

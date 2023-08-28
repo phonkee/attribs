@@ -31,6 +31,17 @@ type Interval struct {
 }
 
 func TestAttrs(t *testing.T) {
+	t.Run("test pointer to struct", func(t *testing.T) {
+		type Struct struct {
+			Hello string `attr:"name=hello"`
+		}
+
+		d, err := New(&Struct{})
+		assert.NoError(t, err)
+		assert.NotNil(t, d)
+
+	})
+
 	t.Run("test value", func(t *testing.T) {
 		for _, item := range []struct {
 			input       string

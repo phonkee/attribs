@@ -10,7 +10,6 @@ import (
 type attrType string
 
 const (
-	attrTypeInvalid attrType = "invalid"
 	attrTypeInteger attrType = "integer"
 	attrTypeString  attrType = "string"
 	attrTypeFloat   attrType = "float"
@@ -171,7 +170,6 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 		}
 	case reflect.Map:
 		result.Type = attrTypeMap
-		// TODO: implement this
 
 		// now check if key is string, because we support only string keys
 		if val.Type().Key() != reflect.TypeOf("") {
