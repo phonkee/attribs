@@ -20,29 +20,40 @@ func Must[T any](t Definition[T], err error) Definition[T] {
 
 // New analyzes given struct and returns definition. definition can then parse tags and returns values
 // If something fails, this function panics
+// TODO: Add support for pointers to struct
 func New[T any](what T) (result Definition[T], _ error) {
 	// now we go over all fields and check which are used
 	typ := reflect.TypeOf(what)
+	isPtr := typ.Kind() == reflect.Ptr
 
-	if typ == nil || typ.Kind() != reflect.Struct {
+	// support for pointers
+	if typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
+
+	// check if given type is struct
+	if typ.Kind() != reflect.Struct {
 		return result, ErrNotStruct
 	}
 
-	attr, err := inspect(*new(T), map[reflect.Type]*attr{})
+	//attr, err := inspect(*new(T), map[reflect.Type]*attr{})
+	attr, err := inspect(reflect.Indirect(reflect.New(typ)).Interface(), map[reflect.Type]*attr{})
 
 	if err != nil {
 		return result, err
 	}
 
 	return Definition[T]{
-		attr: attr,
+		attr:  attr,
+		isPtr: isPtr,
 	}, nil
 }
 
 // Definition defies definition of struct
 type Definition[T any] struct {
 	// structure attribute instance
-	attr *attr
+	attr  *attr
+	isPtr bool
 }
 
 // Parse parses string with attributes into given type
@@ -58,11 +69,18 @@ func (d Definition[T]) Parse(input string) (T, error) {
 	// prepare settable value
 	val := reflect.Indirect(reflect.ValueOf(result))
 
+	if d.isPtr {
+		val = reflect.Indirect(reflect.ValueOf(result).Elem())
+	}
+
 	// create new value from given parsed attributes
-	// TODO: add ignore argument that ignores unknown attributes
 	err = d.attr.Set(val, &parser.Attribute{Attributes: attrs})
 	if err != nil {
 		return *result, err
+	}
+
+	if d.isPtr {
+		val = val.Addr()
 	}
 
 	return val.Interface().(T), nil
