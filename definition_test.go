@@ -592,4 +592,8 @@ func TestAttrsMust(t *testing.T) {
 	assert.NotPanics(t, func() {
 		Must(New(AttrDef{}))
 	})
+	assert.Panics(t, func() {
+		Must(New(make(chan int)))
+	})
+
 }

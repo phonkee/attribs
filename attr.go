@@ -272,11 +272,6 @@ func (a *attr) Set(target reflect.Value, parsed *parser.Attribute) error {
 	}
 }
 
-// TODO: implement so that it takes pointer to any (nil)
-func (a *attr) setAny(target reflect.Value, parsed *parser.Attribute) error {
-	return nil
-}
-
 func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute) error {
 	if parsed.Array == nil {
 		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
