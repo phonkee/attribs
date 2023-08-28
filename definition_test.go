@@ -1,7 +1,6 @@
 package attribs
 
 import (
-	"github.com/davecgh/go-spew/spew"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -546,12 +545,12 @@ func TestAttrs(t *testing.T) {
 
 	t.Run("test arrays of arrays", func(t *testing.T) {
 		type Test struct {
-			Metadatass [][]int `attr:"name=metadatass"`
+			Metadatass    [][]int `attr:"name=metadatass"`
+			MetadatassAny [][]any `attr:"name=metadatass_any"`
 		}
 		def, err := New(Test{})
 		assert.NoError(t, err)
 		assert.NotNil(t, def)
-		spew.Dump(def)
 
 		data := []struct {
 			input    string
@@ -560,6 +559,9 @@ func TestAttrs(t *testing.T) {
 		}{
 			{input: "metadatass[[1,2,3]]", expected: Test{
 				Metadatass: [][]int{{1, 2, 3}},
+			}},
+			{input: "metadatass_any[[1,'hello',4.2]]", expected: Test{
+				MetadatassAny: [][]any{{1, "hello", 4.2}},
 			}},
 		}
 

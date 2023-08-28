@@ -272,6 +272,11 @@ func (a *attr) Set(target reflect.Value, parsed *parser.Attribute) error {
 	}
 }
 
+// TODO: implement so that it takes pointer to any (nil)
+func (a *attr) setAny(target reflect.Value, parsed *parser.Attribute) error {
+	return nil
+}
+
 func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute) error {
 	if parsed.Array == nil {
 		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
@@ -288,10 +293,21 @@ func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute) error {
 
 	// iterate over all values and set one by one
 	for _, item := range parsed.Array {
-		val := reflect.Indirect(reflect.New(target.Type().Elem()))
+		var (
+			err error
+			val reflect.Value
+		)
+		if a.Elem.Type == attrTypeAny {
+			val, err = item.Build()
+			if err != nil {
+				return err
+			}
+		} else {
+			val = reflect.Indirect(reflect.New(target.Type().Elem()))
 
-		if err := a.Elem.Set(val, &item); err != nil {
-			return fmt.Errorf("cannot set array value for %s: %s", parsed.Name, err)
+			if err := a.Elem.Set(val, &item); err != nil {
+				return fmt.Errorf("cannot set array value for %s: %s", parsed.Name, err)
+			}
 		}
 		nu = reflect.Append(nu, val)
 	}
