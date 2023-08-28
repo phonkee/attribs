@@ -544,9 +544,13 @@ func TestAttrs(t *testing.T) {
 	})
 
 	t.Run("test arrays of arrays", func(t *testing.T) {
+		type Struct struct {
+			ID int `attr:"name=id"`
+		}
 		type Test struct {
-			Metadatass    [][]int `attr:"name=metadatass"`
-			MetadatassAny [][]any `attr:"name=metadatass_any"`
+			Metadatass    [][]int     `attr:"name=metadatass"`
+			MetadatassAny [][]any     `attr:"name=metadatass_any"`
+			Structs       [][]*Struct `attr:"name=structs"`
 		}
 		def, err := New(Test{})
 		assert.NoError(t, err)
@@ -562,6 +566,11 @@ func TestAttrs(t *testing.T) {
 			}},
 			{input: "metadatass_any[[1,'hello',4.2]]", expected: Test{
 				MetadatassAny: [][]any{{1, "hello", 4.2}},
+			}},
+			{input: "structs[[(id=42)]]", expected: Test{
+				Structs: [][]*Struct{{{
+					ID: 42,
+				}}},
 			}},
 		}
 
