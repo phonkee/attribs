@@ -32,11 +32,10 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 	}
 
 	val := reflect.ValueOf(what)
-	originalType := val.Type()
 
 	// prepare result
 	result := &attr{
-		Nullable: val.Kind() == reflect.Pointer,
+		Nullable: val.Kind() == reflect.Pointer || val.Kind() == reflect.Interface,
 	}
 
 	if val.Kind() == reflect.Ptr && val.IsNil() {
@@ -49,9 +48,6 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 	}
 
 	switch val.Type().Kind() {
-	case reflect.Interface:
-		result.Type = attrTypeAny
-		break
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		result.Type = attrTypeInteger
 		result.Signed = true
@@ -77,16 +73,12 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 		)
 		// check for any type
 		if typ.Kind() == reflect.Interface {
-			result.Elem = &attr{
-				Type: attrTypeAny,
-			}
-			break
+			elem = anyAttr()
 		} else {
 			newType := reflect.Indirect(reflect.New(typ))
 			if newType.Kind() == reflect.Ptr && newType.IsNil() {
 				newType.Set(reflect.New(newType.Type().Elem()))
 			}
-
 			elem, err = inspect(newType.Interface(), cache)
 			if err != nil {
 				return nil, err
@@ -100,14 +92,6 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 
 		// TODO: peek into cache, if enabled with 2 same fields, it will issue
 		// TODO: recursive structures still not supported
-		//if cached, ok := cache[originalType]; ok {
-		//	return cached, nil
-		//}
-
-		// cache schema for this type to avoid infinite recursion
-		if cache != nil {
-			cache[originalType] = result
-		}
 
 		// prepare all props
 		result.Properties = make(map[string]*attr)
@@ -129,9 +113,7 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 
 			// prepare new value for field, so we can inspect it
 			if field.Kind() == reflect.Interface {
-				fieldAttr = &attr{
-					Type: attrTypeAny,
-				}
+				fieldAttr = anyAttr()
 			} else {
 				if field.Type().Kind() == reflect.Ptr {
 					// in case of pointer we get type what it points to and then reflect.New
@@ -199,30 +181,34 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 		// inspect value type
 		elemType := val.Type().Elem()
 
+		var (
+			elemAttr *attr
+			err      error
+		)
+
 		// shorthand for any type
 		// this is not supported to pass to inspect (we know why) so we just return attr with any type (simple, huh?)
 		if elemType.Kind() == reflect.Interface {
-			result.Elem = &attr{
-				Type: attrTypeAny,
+			elemAttr = anyAttr()
+		} else {
+			// prepare new value for field, so we can inspect it
+			newValue := func() any {
+				if elemType.Kind() == reflect.Ptr {
+					return reflect.Indirect(reflect.New(elemType.Elem())).Interface()
+				} else {
+					return reflect.Indirect(reflect.New(elemType)).Interface()
+				}
+			}()
+
+			// field attribute returned from inspect
+			elemAttr, err = inspect(newValue, cache)
+			if err != nil {
+				return nil, err
 			}
-			break
 		}
 
-		// prepare new value for field, so we can inspect it
-		newValue := func() any {
-			if elemType.Kind() == reflect.Ptr {
-				return reflect.Indirect(reflect.New(elemType.Elem())).Interface()
-			} else {
-				return reflect.Indirect(reflect.New(elemType)).Interface()
-			}
-		}()
-
-		// field attribute returned from inspect
-		elemAttr, err := inspect(newValue, cache)
-		if err != nil {
-			return nil, err
-		}
 		result.Elem = elemAttr
+		result.Elem.Parent = result
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedType, val.Type().String())
 	}
@@ -249,6 +235,13 @@ type attr struct {
 
 	// Parent for better debugging
 	Parent *attr
+}
+
+func anyAttr() *attr {
+	return &attr{
+		Type:     attrTypeAny,
+		Nullable: true,
+	}
 }
 
 // Set sets value to given target from parser.
@@ -296,6 +289,7 @@ func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute) error {
 	// iterate over all values and set one by one
 	for _, item := range parsed.Array {
 		val := reflect.Indirect(reflect.New(target.Type().Elem()))
+
 		if err := a.Elem.Set(val, &item); err != nil {
 			return fmt.Errorf("cannot set array value for %s: %s", parsed.Name, err)
 		}

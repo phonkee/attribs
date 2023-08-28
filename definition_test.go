@@ -507,10 +507,9 @@ func TestAttrs(t *testing.T) {
 
 	t.Run("test any", func(t *testing.T) {
 		type Test struct {
-			Metadata   map[string]any `attr:"name=metadata"`
-			Metadatas  []any          `attr:"name=metadatas"`
-			Field      any            `attr:"name=field"`
-			Metadatass [][]any        `attr:"name=metadatass"`
+			Metadata  map[string]any `attr:"name=metadata"`
+			Metadatas []any          `attr:"name=metadatas"`
+			Field     any            `attr:"name=field"`
 		}
 		def, err := New(Test{})
 		assert.NoError(t, err)
@@ -531,7 +530,6 @@ func TestAttrs(t *testing.T) {
 			{input: "field=true", expected: Test{Field: true}},
 			{input: "field", expected: Test{Field: true}},
 			{input: "field='world'", expected: Test{Field: "world"}},
-			{input: "metadatas[1, 'hello', true]", expected: Test{Metadata: map[string]any{}}},
 		}
 
 		for _, item := range data {
@@ -547,9 +545,8 @@ func TestAttrs(t *testing.T) {
 	})
 
 	t.Run("test arrays of arrays", func(t *testing.T) {
-		return
 		type Test struct {
-			Metadatass [][]any `attr:"name=metadatass"`
+			Metadatass [][]int `attr:"name=metadatass"`
 		}
 		def, err := New(Test{})
 		assert.NoError(t, err)
@@ -561,7 +558,9 @@ func TestAttrs(t *testing.T) {
 			expected Test
 			err      error
 		}{
-			{input: "metadatass[[1,2,3]]", expected: Test{}},
+			{input: "metadatass[[1,2,3]]", expected: Test{
+				Metadatass: [][]int{{1, 2, 3}},
+			}},
 		}
 
 		for _, item := range data {
