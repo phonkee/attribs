@@ -7,39 +7,19 @@ import (
 	"strconv"
 )
 
-type attrType int
+type attrType string
 
 const (
-	attrTypeInvalid attrType = iota
-	attrTypeInteger
-	attrTypeString
-	attrTypeFloat
-	attrTypeStruct
-	attrTypeArray
-	attrTypeBoolean
-	attrTypeMap
-	attrTypeAny // any type is only supported in map, otherwise is impossible to get this type from inspect (since we pass values)
+	attrTypeInvalid attrType = "invalid"
+	attrTypeInteger attrType = "integer"
+	attrTypeString  attrType = "string"
+	attrTypeFloat   attrType = "float"
+	attrTypeStruct  attrType = "struct"
+	attrTypeArray   attrType = "array"
+	attrTypeBoolean attrType = "boolean"
+	attrTypeMap     attrType = "map"
+	attrTypeAny     attrType = "any" // any type is only supported in map, otherwise is impossible to get this type from inspect (since we pass values)
 )
-
-func (a attrType) String() string {
-	switch a {
-	case attrTypeInvalid:
-		return "invalid"
-	case attrTypeInteger:
-		return "integer"
-	case attrTypeString:
-		return "string"
-	case attrTypeFloat:
-		return "float"
-	case attrTypeStruct:
-		return "struct"
-	case attrTypeArray:
-		return "array"
-	case attrTypeBoolean:
-		return "boolean"
-	}
-	return "unknown"
-}
 
 // inspect given value and return attribute
 // TODO: cache is not supported yet
@@ -97,7 +77,7 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 		)
 		// check for any type
 		if typ.Kind() == reflect.Interface {
-			elem = &attr{
+			result.Elem = &attr{
 				Type: attrTypeAny,
 			}
 			break
@@ -106,6 +86,7 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 			if newType.Kind() == reflect.Ptr && newType.IsNil() {
 				newType.Set(reflect.New(newType.Type().Elem()))
 			}
+
 			elem, err = inspect(newType.Interface(), cache)
 			if err != nil {
 				return nil, err
@@ -294,7 +275,7 @@ func (a *attr) Set(target reflect.Value, parsed *parser.Attribute) error {
 	case attrTypeMap:
 		return a.setMap(target, parsed)
 	default:
-		return parser.NewParseError(parsed.Position, "invalid attribute type %d", a.Type)
+		return parser.NewParseError(parsed.Position, "invalid attribute type %v", a.Type)
 	}
 }
 

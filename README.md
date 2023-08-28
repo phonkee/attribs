@@ -55,8 +55,9 @@ Currently supported (tested) types are
 - bool  (and pointers)
 - float32, float64  (and pointers)
 - structs (embedded) (and pointers)
-- array (and pointers)
-- map (and pointers to map) with string key to any supported type  
+- array (and pointers) - (arrays of arrays yet not supported)
+- map (and pointers to map) with string key to any supported type
+- any type in map/slice/struct
 
 # Author
 

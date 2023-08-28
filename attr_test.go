@@ -94,8 +94,8 @@ func TestInspect(t *testing.T) {
 				d, err := inspect(item.input, nil)
 				assert.NoError(t, err)
 				assert.NotNil(t, d)
-				assert.Equal(t, item.expectedElemAttrType, d.Elem.Type, "input: %T, type: %s", item.input, d.Type.String())
-				assert.Equal(t, item.nullable, d.Nullable, "input: %T, type: %s", item.input, d.Type.String())
+				assert.Equal(t, item.expectedElemAttrType, d.Elem.Type, "input: %T, type: %s", item.input, d.Type)
+				assert.Equal(t, item.nullable, d.Nullable, "input: %T, type: %s", item.input, d.Type)
 			}
 		})
 

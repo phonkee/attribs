@@ -1,6 +1,7 @@
 package attribs
 
 import (
+	"github.com/davecgh/go-spew/spew"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -506,9 +507,10 @@ func TestAttrs(t *testing.T) {
 
 	t.Run("test any", func(t *testing.T) {
 		type Test struct {
-			Metadata  map[string]any `attr:"name=metadata"`
-			Metadatas []any          `attr:"name=metadatas"`
-			Field     any            `attr:"name=field"`
+			Metadata   map[string]any `attr:"name=metadata"`
+			Metadatas  []any          `attr:"name=metadatas"`
+			Field      any            `attr:"name=field"`
+			Metadatass [][]any        `attr:"name=metadatass"`
 		}
 		def, err := New(Test{})
 		assert.NoError(t, err)
@@ -529,6 +531,7 @@ func TestAttrs(t *testing.T) {
 			{input: "field=true", expected: Test{Field: true}},
 			{input: "field", expected: Test{Field: true}},
 			{input: "field='world'", expected: Test{Field: "world"}},
+			{input: "metadatas[1, 'hello', true]", expected: Test{Metadata: map[string]any{}}},
 		}
 
 		for _, item := range data {
@@ -542,6 +545,37 @@ func TestAttrs(t *testing.T) {
 		}
 
 	})
+
+	t.Run("test arrays of arrays", func(t *testing.T) {
+		return
+		type Test struct {
+			Metadatass [][]any `attr:"name=metadatass"`
+		}
+		def, err := New(Test{})
+		assert.NoError(t, err)
+		assert.NotNil(t, def)
+		spew.Dump(def)
+
+		data := []struct {
+			input    string
+			expected Test
+			err      error
+		}{
+			{input: "metadatass[[1,2,3]]", expected: Test{}},
+		}
+
+		for _, item := range data {
+			value, err := def.Parse(item.input)
+			if item.err != nil {
+				assert.ErrorIs(t, err, item.err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, item.expected, value)
+			}
+		}
+
+	})
+
 }
 
 func TestAttrsMust(t *testing.T) {
