@@ -36,6 +36,8 @@ func parseAttribsTag(tag string) (result attrAttribs, _ error) {
 					return result, fmt.Errorf("%w: invalid value for disabled: %v", ErrInvalidTag, *attr.Value.String)
 				}
 				result.Disabled = b
+			} else {
+				return result, fmt.Errorf("%w: invalid value for disabled: %v", ErrInvalidTag, *attr.Value.String)
 			}
 			result.Disabled = true
 		default:

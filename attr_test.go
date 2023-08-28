@@ -63,4 +63,59 @@ func TestInspect(t *testing.T) {
 		assert.NotNil(t, a)
 	})
 
+	t.Run("test map support", func(t *testing.T) {
+		type Test struct {
+			Hello string `attr:"name=hello"`
+		}
+
+		t.Run("test valid definitions", func(t *testing.T) {
+			data := []struct {
+				input                any
+				expectedElemAttrType attrType
+				nullable             bool
+			}{
+				{map[string]string{}, attrTypeString, false},
+				{map[string]map[string]string{}, attrTypeMap, false},
+				{&map[string]map[string]string{}, attrTypeMap, true},
+				{&map[string]*map[string]string{}, attrTypeMap, true},
+				{map[string]any{}, attrTypeAny, false},
+				{&map[string]string{}, attrTypeString, true},
+				{&map[string]any{}, attrTypeAny, true},
+				{&map[string]string{}, attrTypeString, true},
+				{&map[string]Test{}, attrTypeStruct, true},
+				{map[string]*Test{}, attrTypeStruct, false},
+				{&map[string]*int{}, attrTypeInteger, true},
+				{map[string]*int{}, attrTypeInteger, false},
+				{map[string]*[]string{}, attrTypeArray, false},
+				{map[string]*[]*string{}, attrTypeArray, false},
+				{map[string][]*string{}, attrTypeArray, false},
+			}
+			for _, item := range data {
+				d, err := inspect(item.input, nil)
+				assert.NoError(t, err)
+				assert.NotNil(t, d)
+				assert.Equal(t, item.expectedElemAttrType, d.Elem.Type, "input: %T, type: %s", item.input, d.Type)
+				assert.Equal(t, item.nullable, d.Nullable, "input: %T, type: %s", item.input, d.Type)
+			}
+		})
+
+		t.Run("test invalid definitions", func(t *testing.T) {
+			data := []struct {
+				input interface{}
+				err   error
+			}{
+				{map[int]int{}, ErrMapKeyNotStr},
+				{map[bool]int{}, ErrMapKeyNotStr},
+				{map[*string]int{}, ErrMapKeyNotStr},
+				{map[string]chan struct{}{}, ErrUnsupportedType},
+			}
+			for _, item := range data {
+				d, err := inspect(item.input, nil)
+				assert.ErrorIs(t, err, item.err)
+				assert.Nil(t, d)
+			}
+		})
+
+	})
+
 }

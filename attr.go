@@ -7,50 +7,35 @@ import (
 	"strconv"
 )
 
-type attrType int
+type attrType string
 
 const (
-	attrTypeInvalid attrType = iota
-	attrTypeInteger
-	attrTypeString
-	attrTypeFloat
-	attrTypeStruct
-	attrTypeArray
-	attrTypeBoolean
+	attrTypeInvalid attrType = "invalid"
+	attrTypeInteger attrType = "integer"
+	attrTypeString  attrType = "string"
+	attrTypeFloat   attrType = "float"
+	attrTypeStruct  attrType = "struct"
+	attrTypeArray   attrType = "array"
+	attrTypeBoolean attrType = "boolean"
+	attrTypeMap     attrType = "map"
+	attrTypeAny     attrType = "any" // any type is only supported in map, otherwise is impossible to get this type from inspect (since we pass values)
 )
 
-func (a attrType) String() string {
-	switch a {
-	case attrTypeInvalid:
-		return "invalid"
-	case attrTypeInteger:
-		return "integer"
-	case attrTypeString:
-		return "string"
-	case attrTypeFloat:
-		return "float"
-	case attrTypeStruct:
-		return "struct"
-	case attrTypeArray:
-		return "array"
-	case attrTypeBoolean:
-		return "boolean"
-	}
-	return "unknown"
-}
-
 // inspect given value and return attribute
+// TODO: cache is not supported yet
 func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 	if _, ok := what.(reflect.Type); ok {
-		panic("passing type to inspect is not supported")
+		panic("passing reflect.Type to inspect is not supported")
+	}
+	if _, ok := what.(reflect.Value); ok {
+		panic("passing reflect.Value to inspect is not supported")
 	}
 
 	val := reflect.ValueOf(what)
-	originalType := val.Type()
 
 	// prepare result
 	result := &attr{
-		Nullable: val.Kind() == reflect.Pointer,
+		Nullable: val.Kind() == reflect.Pointer || val.Kind() == reflect.Interface,
 	}
 
 	if val.Kind() == reflect.Ptr && val.IsNil() {
@@ -66,37 +51,47 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		result.Type = attrTypeInteger
 		result.Signed = true
+		break
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		result.Type = attrTypeInteger
+		break
 	case reflect.Float32, reflect.Float64:
 		result.Type = attrTypeFloat
+		break
 	case reflect.Bool:
 		result.Type = attrTypeBoolean
+		break
 	case reflect.String:
 		result.Type = attrTypeString
+		break
 	case reflect.Array, reflect.Slice:
 		result.Type = attrTypeArray
-		newType := reflect.Indirect(reflect.New(val.Type().Elem()))
-		if newType.Kind() == reflect.Ptr && newType.IsNil() {
-			newType.Set(reflect.New(newType.Type().Elem()))
-		}
-		elem, err := inspect(newType.Interface(), cache)
-		if err != nil {
-			return nil, err
+		typ := val.Type().Elem()
+		var (
+			elem *attr
+			err  error
+		)
+		// check for any type
+		if typ.Kind() == reflect.Interface {
+			elem = anyAttr()
+		} else {
+			newType := reflect.Indirect(reflect.New(typ))
+			if newType.Kind() == reflect.Ptr && newType.IsNil() {
+				newType.Set(reflect.New(newType.Type().Elem()))
+			}
+			elem, err = inspect(newType.Interface(), cache)
+			if err != nil {
+				return nil, err
+			}
 		}
 		elem.Name = val.Type().Elem().String()
+		elem.Parent = result
 		result.Elem = elem
 	case reflect.Struct:
 		result.Type = attrTypeStruct
 
 		// TODO: peek into cache, if enabled with 2 same fields, it will issue
 		// TODO: recursive structures still not supported
-		//if cached, ok := cache[originalType]; ok {
-		//	return cached, nil
-		//}
-
-		// cache schema for this type to avoid infinite recursion
-		cache[originalType] = result
 
 		// prepare all props
 		result.Properties = make(map[string]*attr)
@@ -111,17 +106,26 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 				continue
 			}
 
-			var newValue any
+			var (
+				err       error
+				fieldAttr *attr
+			)
 
 			// prepare new value for field, so we can inspect it
-			if field.Type().Kind() == reflect.Ptr {
-				newValue = reflect.Indirect(reflect.New(field.Type().Elem())).Interface()
+			if field.Kind() == reflect.Interface {
+				fieldAttr = anyAttr()
 			} else {
-				newValue = reflect.Indirect(reflect.New(field.Type())).Interface()
+				if field.Type().Kind() == reflect.Ptr {
+					// in case of pointer we get type what it points to and then reflect.New
+					// field attribute returned from inspect
+					fieldAttr, err = inspect(reflect.Indirect(reflect.New(field.Type().Elem())).Interface(), cache)
+				} else {
+					// field attribute returned from inspect
+					fieldAttr, err = inspect(reflect.Indirect(reflect.New(field.Type())).Interface(), cache)
+				}
 			}
 
 			// field attribute returned from inspect
-			fieldAttr, err := inspect(newValue, cache)
 			if err != nil {
 				return nil, err
 			}
@@ -157,6 +161,7 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 			// names and aliases
 			fieldAttr.Name = fieldType.Name
 			fieldAttr.Alias = pa.Alias
+			fieldAttr.Parent = result
 			if fieldAttr.Alias == "" {
 				fieldAttr.Alias = fieldAttr.Name
 			}
@@ -164,7 +169,48 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 			// add field attribute to struct properties
 			result.Properties[fieldAttr.Alias] = fieldAttr
 		}
+	case reflect.Map:
+		result.Type = attrTypeMap
+		// TODO: implement this
 
+		// now check if key is string, because we support only string keys
+		if val.Type().Key() != reflect.TypeOf("") {
+			return nil, fmt.Errorf("%w: %s", ErrMapKeyNotStr, val.Type().Key().String())
+		}
+
+		// inspect value type
+		elemType := val.Type().Elem()
+
+		var (
+			elemAttr *attr
+			err      error
+		)
+
+		// shorthand for any type
+		// this is not supported to pass to inspect (we know why) so we just return attr with any type (simple, huh?)
+		if elemType.Kind() == reflect.Interface {
+			elemAttr = anyAttr()
+		} else {
+			// prepare new value for field, so we can inspect it
+			newValue := func() any {
+				if elemType.Kind() == reflect.Ptr {
+					return reflect.Indirect(reflect.New(elemType.Elem())).Interface()
+				} else {
+					return reflect.Indirect(reflect.New(elemType)).Interface()
+				}
+			}()
+
+			// field attribute returned from inspect
+			elemAttr, err = inspect(newValue, cache)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		result.Elem = elemAttr
+		result.Elem.Parent = result
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedType, val.Type().String())
 	}
 
 	return result, nil
@@ -178,17 +224,24 @@ type attr struct {
 	Nullable bool
 	Type     attrType
 
-	// integer and float types
-	//Width int
-
 	// integer type
 	Signed bool
 
-	// array/slice
+	// array/slice/map (for map we don't need key since only string is supported)
 	Elem *attr
 
 	// struct properties
 	Properties map[string]*attr
+
+	// Parent for better debugging
+	Parent *attr
+}
+
+func anyAttr() *attr {
+	return &attr{
+		Type:     attrTypeAny,
+		Nullable: true,
+	}
 }
 
 // Set sets value to given target from parser.
@@ -211,28 +264,12 @@ func (a *attr) Set(target reflect.Value, parsed *parser.Attribute) error {
 	case attrTypeString:
 		return a.setString(target, parsed)
 	case attrTypeStruct:
-		for _, att := range parsed.Attributes {
-			prop, ok := a.Properties[att.Name]
-			if !ok {
-				return parser.NewParseError(att.Position, "unknown attribute %s", att.Name)
-			}
-			var field reflect.Value
-			if target.Kind() == reflect.Ptr {
-				field = target.Elem().FieldByName(prop.Name)
-			} else {
-				field = target.FieldByName(prop.Name)
-			}
-
-			// set property
-			if err := prop.Set(field, &att); err != nil {
-				return err
-			}
-		}
+		return a.setStruct(target, parsed)
+	case attrTypeMap:
+		return a.setMap(target, parsed)
 	default:
-		return parser.NewParseError(parsed.Position, "invalid attribute type %d", a.Type)
+		return parser.NewParseError(parsed.Position, "invalid attribute type %v", a.Type)
 	}
-
-	return nil
 }
 
 func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute) error {
@@ -251,9 +288,21 @@ func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute) error {
 
 	// iterate over all values and set one by one
 	for _, item := range parsed.Array {
-		val := reflect.Indirect(reflect.New(target.Type().Elem()))
-		if err := a.Elem.Set(val, &item); err != nil {
-			return fmt.Errorf("cannot set array value for %s: %s", parsed.Name, err)
+		var (
+			err error
+			val reflect.Value
+		)
+		if a.Elem.Type == attrTypeAny {
+			val, err = item.Build()
+			if err != nil {
+				return err
+			}
+		} else {
+			val = reflect.Indirect(reflect.New(target.Type().Elem()))
+
+			if err := a.Elem.Set(val, &item); err != nil {
+				return fmt.Errorf("cannot set array value for %s: %s", parsed.Name, err)
+			}
 		}
 		nu = reflect.Append(nu, val)
 	}
@@ -320,6 +369,34 @@ func (a *attr) setInteger(target reflect.Value, parsed *parser.Attribute) error 
 	return nil
 }
 
+func (a *attr) setMap(target reflect.Value, parsed *parser.Attribute) error {
+	// check if we really have object type, otherwise it's invalid
+	if parsed.Attributes == nil {
+		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+	}
+
+	// check if target is nil (map is not initialized)
+	if target.Kind() == reflect.Map && target.IsNil() {
+		target.Set(reflect.MakeMap(target.Type()))
+	}
+
+	// special case for any type
+	switch a.Elem.Type {
+	case attrTypeAny:
+		// special case for any type, we need to build recursively maps and stuff
+		v, err := parsed.Build()
+		if err != nil {
+			return err
+		}
+		target.Set(v)
+	default:
+		// TODO: non any elem type
+
+	}
+
+	return nil
+}
+
 func (a *attr) setString(target reflect.Value, parsed *parser.Attribute) error {
 	if parsed.Value == nil || parsed.Value.String == nil {
 		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
@@ -330,5 +407,36 @@ func (a *attr) setString(target reflect.Value, parsed *parser.Attribute) error {
 
 	target.SetString(*parsed.Value.String)
 
+	return nil
+}
+
+func (a *attr) setStruct(target reflect.Value, parsed *parser.Attribute) error {
+	// TODO: check other than struct types
+	for _, att := range parsed.Attributes {
+		prop, ok := a.Properties[att.Name]
+		if !ok {
+			return parser.NewParseError(att.Position, "unknown attribute %s", att.Name)
+		}
+		var field reflect.Value
+		if target.Kind() == reflect.Ptr {
+			field = target.Elem().FieldByName(prop.Name)
+		} else {
+			field = target.FieldByName(prop.Name)
+		}
+		// if any type, we just build reflect.Value and set it
+		if field.Kind() == reflect.Interface {
+			v, err := att.Build()
+			if err != nil {
+				return err
+			}
+			field.Set(v)
+		} else {
+			// set property
+			if err := prop.Set(field, &att); err != nil {
+				return err
+			}
+		}
+
+	}
 	return nil
 }
