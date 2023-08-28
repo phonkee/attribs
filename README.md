@@ -12,6 +12,16 @@ You can find parser [here](parser/).
 Altough New function returns generic definition, mapping values to struct uses reflection, so please don't use it in
 performance critical code.
 
+# Grammar
+
+Attribs defines following grammar for attributes
+
+* `key='value', key2='value2'` - key value pair
+* `[key='value']` - object
+* `()` - array
+
+We will show full example
+
 # Example
 
 Let's omit error handling in examples. First we need to define all attributes in single structure:
@@ -21,7 +31,6 @@ package main
 
 import (
 	"github.com/phonkee/attribs"
-	"reflect"
 )
 
 type Tag struct {
@@ -30,6 +39,11 @@ type Tag struct {
 	Description  string         `attr:"description"`
 	Metadata     map[string]any `attr:"name=metadata"`
 	Tags         []string       `attr:"name=tags"`
+	Inner        Inner          `attr:"name=inner"`
+}
+
+type Inner struct {
+	Hello string `attr:"name=hello"`
 }
 
 var d attribs.Definition[Tag]
@@ -41,15 +55,18 @@ func init() {
 
 func main() {
 	// now parse example attributes definition
-	result, _ := d.Parse("default=42, readonly, description = 'This is a description', tags=['tag1', 'tag2']")
+	result, _ := d.Parse("default=42, readonly, description='This is a description', tags('tag1', 'tag2'), inner[hello='world']")
 
-	reflect.DeepEqual(Tag{
+	expected := Tag{
 		DefaultFirst: 42,
 		Readonly:     true,
 		Description:  "This is a description",
 		Metadata:     map[string]any{},
 		Tags:         []string{"tag1", "tag2"},
-	}, result)
+		Inner: Inner{
+			Hello: "world",
+		},
+	}
 }
 
 ```
