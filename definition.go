@@ -68,6 +68,10 @@ func (d Definition[T]) Parse(input string) (T, error) {
 
 	result = result.Elem()
 
+	if d.isPtr {
+		val = reflect.Indirect(reflect.ValueOf(result).Elem())
+	}
+
 	// create new value from given parsed attributes
 	err = d.attr.Set(result, &parser.Attribute{Attributes: attrs})
 	if err != nil {
