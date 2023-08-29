@@ -32,14 +32,34 @@ type Interval struct {
 
 func TestAttrs(t *testing.T) {
 	t.Run("test pointer to struct", func(t *testing.T) {
-		type Struct struct {
-			Hello string `attr:"name=hello"`
+		// BaseTag provides empty Tag implementation
+		type BaseTag struct{}
+		// DescriptionTagMixin is mixin that provides label and description for field tags
+		type DescriptionTagMixin struct {
+			Label       string `attr:"name=label"`
+			Description string `attr:"name=description"`
 		}
 
-		d, err := New(&Struct{})
+		// StringFieldTag represents string field tag, it supports various options
+		type StringFieldTag struct {
+			BaseTag
+			DescriptionTagMixin
+			//Validate *StringFieldValidateTag `attr:"name=validate"`
+			//Enum     *[]string               `attr:"name=enum"`
+		}
+
+		d, err := New(&StringFieldTag{})
 		assert.NoError(t, err)
 		assert.NotNil(t, d)
-
+		x, err := d.Parse("label='hello', description='world'")
+		assert.NoError(t, err)
+		assert.Equal(t, &StringFieldTag{
+			BaseTag{},
+			DescriptionTagMixin{
+				Label:       "hello",
+				Description: "world",
+			},
+		}, x)
 	})
 
 	t.Run("test value", func(t *testing.T) {
