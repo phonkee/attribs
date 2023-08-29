@@ -17,8 +17,8 @@ performance critical code.
 Attribs defines following grammar for attributes
 
 * `key='value', key2='value2'` - key value pair
-* `[key='value']` - object
-* `()` - array
+* `(key='value')` - object
+* `[]` - array
 
 Warning! Top level object must be an object (or pointer to object).
 
