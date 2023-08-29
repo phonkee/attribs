@@ -57,30 +57,21 @@ type Definition[T any] struct {
 
 // Parse parses string with attributes into given type
 func (d Definition[T]) Parse(input string) (T, error) {
-	result := new(T)
+	typ := reflect.TypeOf(*new(T))
+	result := reflect.New(typ)
 
 	// parse input to attribute tree
 	attrs, err := parser.Parse(strings.NewReader(input))
 	if err != nil {
-		return *result, err
+		return result.Interface().(T), err
 	}
-
-	// prepare settable value
-	val := reflect.Indirect(reflect.ValueOf(result))
-
-	if d.isPtr {
-		val = reflect.Indirect(reflect.ValueOf(result).Elem())
-	}
+	result = result.Elem()
 
 	// create new value from given parsed attributes
-	err = d.attr.Set(val, &parser.Attribute{Attributes: attrs})
+	err = d.attr.Set(result, &parser.Attribute{Attributes: attrs})
 	if err != nil {
-		return *result, err
+		return result.Interface().(T), err
 	}
 
-	if d.isPtr {
-		val = val.Addr()
-	}
-
-	return val.Interface().(T), nil
+	return result.Interface().(T), nil
 }
