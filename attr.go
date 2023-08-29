@@ -21,13 +21,16 @@ const (
 )
 
 // inspect given value and return attribute
-// TODO: cache is not supported yet
-func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
+func inspect(what any, c ...map[reflect.Type]*attr) (*attr, error) {
 	if _, ok := what.(reflect.Type); ok {
 		panic("passing reflect.Type to inspect is not supported")
 	}
 	if _, ok := what.(reflect.Value); ok {
 		panic("passing reflect.Value to inspect is not supported")
+	}
+	cache := map[reflect.Type]*attr{}
+	if len(c) > 0 && c[0] != nil {
+		cache = c[0]
 	}
 
 	val := reflect.ValueOf(what)
@@ -89,8 +92,12 @@ func inspect(what any, cache map[reflect.Type]*attr) (*attr, error) {
 	case reflect.Struct:
 		result.Type = attrTypeStruct
 
-		// TODO: peek into cache, if enabled with 2 same fields, it will issue
-		// TODO: recursive structures still not supported
+		// check if we have already inspected this type (support for recursion #10)
+		if existing, ok := cache[val.Type()]; ok {
+			result.Elem = existing
+			break
+		}
+		cache[val.Type()] = result
 
 		// prepare all props
 		result.Properties = make(map[string]*attr)
@@ -226,6 +233,7 @@ type attr struct {
 	Signed bool
 
 	// array/slice/map (for map we don't need key since only string is supported)
+	// we also use elem for already parsed attributes (recursion)
 	Elem *attr
 
 	// struct properties
@@ -409,6 +417,11 @@ func (a *attr) setString(target reflect.Value, parsed *parser.Attribute) error {
 }
 
 func (a *attr) setStruct(target reflect.Value, parsed *parser.Attribute) error {
+	// if this was recursive call, we need to check Elem
+	if a.Elem != nil {
+		return a.Elem.setStruct(target, parsed)
+	}
+
 	// TODO: check other than struct types
 	for _, att := range parsed.Attributes {
 		prop, ok := a.Properties[att.Name]

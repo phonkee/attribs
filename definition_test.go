@@ -1,6 +1,7 @@
-package attribs
+package attribs_test
 
 import (
+	"github.com/phonkee/attribs"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -44,11 +45,9 @@ func TestAttrs(t *testing.T) {
 		type StringFieldTag struct {
 			BaseTag
 			DescriptionTagMixin
-			//Validate *StringFieldValidateTag `attr:"name=validate"`
-			//Enum     *[]string               `attr:"name=enum"`
 		}
 
-		d, err := New(&StringFieldTag{})
+		d, err := attribs.New(&StringFieldTag{})
 		assert.NoError(t, err)
 		assert.NotNil(t, d)
 		x, err := d.Parse("label='hello', description='world'")
@@ -151,7 +150,7 @@ func TestAttrs(t *testing.T) {
 				},
 			},
 		} {
-			defined, err := New(AttrDef{})
+			defined, err := attribs.New(AttrDef{})
 			assert.NoError(t, err)
 
 			value, err := defined.Parse(item.input)
@@ -238,7 +237,7 @@ func TestAttrs(t *testing.T) {
 				},
 			},
 		} {
-			defined, err := New(AttrDef{})
+			defined, err := attribs.New(AttrDef{})
 			assert.NoError(t, err)
 
 			value, err := defined.Parse(item.input)
@@ -252,7 +251,7 @@ func TestAttrs(t *testing.T) {
 		}
 	})
 	t.Run("test pointer", func(t *testing.T) {
-		defined, err := New(AttrDef{})
+		defined, err := attribs.New(AttrDef{})
 		assert.NoError(t, err)
 
 		for _, item := range []struct {
@@ -320,7 +319,7 @@ func TestAttrs(t *testing.T) {
 			},
 			},
 		} {
-			defined, err := New(Example{})
+			defined, err := attribs.New(Example{})
 			assert.NoError(t, err)
 			value, err := defined.Parse(item.input)
 			if item.errExpected != "" {
@@ -345,7 +344,7 @@ func TestAttrs(t *testing.T) {
 			SomeAny  any    `attr:"name=some_any"`
 		}
 
-		defined, err := New(Field{})
+		defined, err := attribs.New(Field{})
 		assert.NoError(t, err)
 
 		for _, item := range []struct {
@@ -388,7 +387,7 @@ func TestAttrs(t *testing.T) {
 		type Struct struct {
 			Any any `attr:"name=any"`
 		}
-		defined, err := New(Struct{})
+		defined, err := attribs.New(Struct{})
 		assert.NoError(t, err)
 
 		for _, item := range []struct {
@@ -455,7 +454,7 @@ func TestAttrs(t *testing.T) {
 			Span
 		}
 
-		defined, err := New(Field{})
+		defined, err := attribs.New(Field{})
 		assert.NoError(t, err)
 
 		for _, item := range []struct {
@@ -509,7 +508,7 @@ func TestAttrs(t *testing.T) {
 				Metadata    map[string]string  `attr:"name=metadata"`
 				MetadataPtr *map[string]string `attr:"name=metadata_ptr"`
 			}
-			def, err := New(Test{})
+			def, err := attribs.New(Test{})
 			assert.NoError(t, err)
 			assert.NotNil(t, def)
 
@@ -541,7 +540,7 @@ func TestAttrs(t *testing.T) {
 			Metadatas []any          `attr:"name=metadatas"`
 			Field     any            `attr:"name=field"`
 		}
-		def, err := New(Test{})
+		def, err := attribs.New(Test{})
 		assert.NoError(t, err)
 		assert.NotNil(t, def)
 
@@ -583,7 +582,7 @@ func TestAttrs(t *testing.T) {
 			MetadatassAny [][]any     `attr:"name=metadatass_any"`
 			Structs       [][]*Struct `attr:"name=structs"`
 		}
-		def, err := New(Test{})
+		def, err := attribs.New(Test{})
 		assert.NoError(t, err)
 		assert.NotNil(t, def)
 
@@ -620,14 +619,40 @@ func TestAttrs(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("test recursive struct", func(t *testing.T) {
+		d, err := attribs.New(RecursiveStruct{})
+		assert.NoError(t, err)
+		assert.NotNil(t, d)
+		got, err := d.Parse("inner(struct(inner(hello='world')))")
+		assert.NoError(t, err)
+		assert.Equal(t, RecursiveStruct{
+			Inner: &RecursiveInner{
+				Struct: &RecursiveStruct{
+					Inner: &RecursiveInner{
+						Hello: ptr("world"),
+					},
+				},
+			},
+		}, got)
+	})
+
+}
+
+type RecursiveStruct struct {
+	Inner *RecursiveInner `attr:"name=inner"`
+}
+type RecursiveInner struct {
+	Struct *RecursiveStruct `attr:"name=struct"`
+	Hello  *string          `attr:"name=hello"`
 }
 
 func TestAttrsMust(t *testing.T) {
 	assert.NotPanics(t, func() {
-		Must(New(AttrDef{}))
+		attribs.Must(attribs.New(AttrDef{}))
 	})
 	assert.Panics(t, func() {
-		Must(New(make(chan int)))
+		attribs.Must(attribs.New(make(chan int)))
 	})
 
 }
