@@ -2,12 +2,14 @@ package attribs
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 )
 
 type multiAttribs struct {
 	Tag string `attr:"name=tag"`
+	ID  string `attr:"name=id"`
 }
 
 var (
@@ -51,15 +53,28 @@ func NewMulti[T any](multi T) (Multi[T], error) {
 			fieldType = fieldType.Elem()
 		}
 
+		existingMD, ok := result.definitions[tag]
+		if ok {
+			if existingMD.erased != nil {
+				return result, fmt.Errorf("if duplicate, cannot have non id-ed: %q", tag)
+			}
+		} else {
+			result.definitions[tag] = &multiDef{
+				index:    i,
+				isPtr:    isPtr,
+				children: map[string]*definitionErased{},
+			}
+		}
+
 		de, err := newErased(fieldType)
 		if err != nil {
 			return result, err
 		}
 
-		result.definitions[tag] = &multiDef{
-			erased: de,
-			index:  i,
-			isPtr:  isPtr,
+		if parsed.ID != "" {
+			result.definitions[parsed.Tag].children[parsed.ID] = de
+		} else {
+			result.definitions[parsed.Tag].erased = de
 		}
 	}
 
@@ -125,7 +140,8 @@ func (m *Multi[T]) ParseStruct(s any) (map[string]*T, error) {
 }
 
 type multiDef struct {
-	erased *definitionErased
-	index  int
-	isPtr  bool
+	erased   *definitionErased
+	index    int
+	isPtr    bool
+	children map[string]*definitionErased
 }

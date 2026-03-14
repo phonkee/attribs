@@ -15,9 +15,19 @@ type AttribTwo struct {
 	World bool `attr:"name=world"`
 }
 
-type Tags struct {
-	AttribOne *AttribOne `attr:"tag=my_tag_one"`
-	AttribTwo *AttribTwo `attr:"tag=my_tag_two"`
+type AttribThree struct {
+	Three int `attr:"name=three"`
+}
+
+type AttribFour struct {
+	Four int `attr:"name=four"`
+}
+
+type TagSet struct {
+	AttribOne   *AttribOne   `attr:"tag=my_tag_one"`
+	AttribTwo   *AttribTwo   `attr:"tag=my_tag_two"`
+	AttribThree *AttribThree `attr:"tag=my_tag, id=three"`
+	AttribFour  *AttribFour  `attr:"tag=my_tag, id=four"`
 }
 
 type Something struct {
@@ -26,7 +36,7 @@ type Something struct {
 }
 
 func main() {
-	m := attribs.Must(attribs.NewMulti(Tags{}))
+	m := attribs.Must(attribs.NewMulti(TagSet{}))
 	//result := attribs.Must(m.ParseStructTag(`my_tag_one:"default=1" my_tag_two:"hello=42"`))
 	result := attribs.Must(m.ParseStruct(Something{}))
 
