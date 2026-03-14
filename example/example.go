@@ -1,6 +1,8 @@
 package main
 
-import "github.com/phonkee/attribs"
+import (
+	"github.com/phonkee/attribs"
+)
 
 type Attribs struct {
 	Name        string `attr:"name=name"`
@@ -13,11 +15,11 @@ var (
 )
 
 type Some struct {
-	//Field  string `extag:"name=field, description='yeah this works'"`
-	Field2 string `extag:"name=field2, description=\"no this doesn't\", other=1"`
+	Field  string `extag:"name=field, description='yeah this works'"`
+	Field2 string `extag:"name=field2, description=\"no this doesn't\n\t\rhello\", other=1"`
 }
 
 func main() {
-	attribs.Debug[Attribs, Some]("extag", Some{})
-
+	result := attribs.Debug[Attribs, Some]("extag", Some{}, true)
+	println(result["Field2"].Description)
 }

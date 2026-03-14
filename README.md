@@ -87,6 +87,42 @@ Currently supported (tested) types are
 - map (and pointers to map) with string key to any supported type
 - `any` type
 
+# Multi
+
+```go
+type AttribOne struct {
+    DefaultFirst int            `attr:"name=default"`
+    Readonly     bool           `attr:"name=readonly"`
+}
+
+type AttribTwo struct {
+    Hello int                `attr:"name=hello"`
+    World     bool           `attr:"name=world"`
+}
+
+// either have different tags
+// this parses example
+// `my_tag_one:"default=1, readonly" my_tag_two:"hello=42, world"`
+type Tags {
+    AttribOne *AttribOne  `attr:"tag=my_tag_one"`
+	AttribTwo *AttribTwo  `attr:"tag=my_tag_two"`
+}
+
+
+// or have same tag, but different id
+// this parses example
+// `my_tag:"one(default=1), two(hello=42, world)"`
+type Tags2 {
+    AttribOne *AttribOne  `attr:"tag=my_tag,id=one"`
+	AttribTwo *AttribTwo  `attr:"tag=my_tag,id=two"`
+}
+
+
+
+```
+
+
+
 # Author
 
 Peter Vrba <phonkee@phonkee.eu>

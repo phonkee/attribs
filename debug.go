@@ -6,8 +6,14 @@ import (
 )
 
 // Debug debugs attribs
-func Debug[A any, T any](tagName string, instance T) {
+func Debug[A any, T any](tagName string, instance T, print ...bool) map[string]A {
 	var attrInstance A
+	result := map[string]A{}
+
+	var shouldPrint bool
+	if len(print) > 0 {
+		shouldPrint = print[0]
+	}
 
 	d, err := New(attrInstance)
 	if err != nil {
@@ -23,7 +29,9 @@ func Debug[A any, T any](tagName string, instance T) {
 		panic("expected struct")
 	}
 
-	fmt.Printf("struct: \"%T\", tag name: %q\n", instance, tagName)
+	if shouldPrint {
+		fmt.Printf("struct: \"%T\", tag name: %q\n", instance, tagName)
+	}
 	for i := 0; i < typ.NumField(); i++ {
 		field := typ.Field(i)
 		tag, ok := field.Tag.Lookup(tagName)
@@ -36,8 +44,13 @@ func Debug[A any, T any](tagName string, instance T) {
 			panicf("failed to parse tag %q: %v", tagName, err)
 		}
 
-		fmt.Printf("  field: %q, tag: %q, parsed: %#v\n", field.Name, tag, parsed)
+		if shouldPrint {
+			fmt.Printf("  field: %q, tag: %q, parsed: %#v\n", field.Name, tag, parsed)
+		}
+
+		result[field.Name] = parsed
 	}
+	return result
 }
 
 func panicf(format string, a ...interface{}) {

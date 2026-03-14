@@ -64,13 +64,22 @@ func (l *lexer) Lex() (int, Token, string) {
 							return l.pos - 1, TokenError, str
 						}
 					}
+					shouldEscapeOuter2 := true
 					switch pr {
 					case 'n':
-						str += string("\n")
-						continue outer2
+						str += "\n"
+					case 'r':
+						str += "\r"
+					case 't':
+						str += "\t"
 					default:
+						shouldEscapeOuter2 = false
 						l.unread()
 					}
+					if shouldEscapeOuter2 {
+						continue outer2
+					}
+
 				}
 
 				if r == '"' {
