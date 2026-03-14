@@ -51,6 +51,7 @@ func TestLexer(t *testing.T) {
 			{inp: "'hello world'", tok: TokenString, val: "hello world"},
 			{inp: "'hello world", tok: TokenError, pos: 12},
 			{inp: `'hello \' world'`, tok: TokenString, val: `hello ' world`},
+			{inp: `"hello world"`, tok: TokenString, val: `hello world`},
 		}
 
 		for _, item := range data {

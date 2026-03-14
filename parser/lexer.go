@@ -42,6 +42,44 @@ func (l *lexer) Lex() (int, Token, string) {
 			return pos, TokenEqual, ""
 		case ',':
 			return pos, TokenComma, ""
+		case '"':
+			str := ""
+			pos := l.pos - 1
+		outer2:
+			for {
+				r, err := l.read()
+				if err != nil {
+					if err == io.EOF {
+						return l.pos - 1, TokenError, ""
+					}
+					// this should not happen
+					return l.pos - 1, TokenError, err.Error()
+				}
+
+				switch {
+				case r == '\\':
+					pr, errp := l.read()
+					if errp != nil {
+						if errp == io.EOF {
+							return l.pos - 1, TokenError, str
+						}
+					}
+					switch pr {
+					case 'n':
+						str += string("\n")
+						continue outer2
+					default:
+						l.unread()
+					}
+				}
+
+				if r == '"' {
+					return pos, TokenString, str
+				}
+
+				str += string(r)
+			}
+
 		case '\'':
 			str := ""
 			pos := l.pos - 1

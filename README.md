@@ -38,7 +38,7 @@ import (
 type Tag struct {
 	DefaultFirst int            `attr:"name=default"`
 	Readonly     bool           `attr:"name=readonly"`
-	Description  string         `attr:"description"`
+	Description  string         `attr:"name=description"`
 	Metadata     map[string]any `attr:"name=metadata"`
 	Tags         []string       `attr:"name=tags"`
 	Inner        Inner          `attr:"name=inner"`
