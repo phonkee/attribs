@@ -19,6 +19,16 @@ type Attribute struct {
 	Array      []Attribute
 }
 
+func (a *Attribute) Children() []Attribute {
+	if a.Attributes != nil {
+		return a.Attributes
+	}
+	if a.Array != nil {
+		return a.Array
+	}
+	return nil
+}
+
 // HasValue returns whether any val was set to attribute
 // if used via parser, one of values is always set
 func (a *Attribute) HasValue() bool {

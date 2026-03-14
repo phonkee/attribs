@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/phonkee/attribs/parser"
 )
 
 type multiAttribs struct {
@@ -96,7 +99,7 @@ func (m *Multi[T]) ParseStructTag(structTag reflect.StructTag) (*T, error) {
 			continue
 		}
 
-		parsed, err := def.erased.Parse(tag)
+		parsed, err := def.Parse(tag)
 		if err != nil {
 			return nil, err
 		}
@@ -144,4 +147,41 @@ type multiDef struct {
 	index    int
 	isPtr    bool
 	children map[string]*definitionErased
+}
+
+func (m *multiDef) firstChild() *definitionErased {
+	for _, child := range m.children {
+		return child
+	}
+	panic("no children")
+}
+
+func (m *multiDef) Parse(input string) (reflect.Value, error) {
+	if m.erased != nil {
+		return m.erased.Parse(input)
+	}
+
+	typ := m.firstChild().typ
+	result := reflect.New(typ)
+
+	// parse input to attribute tree
+	attrs, err := parser.Parse(strings.NewReader(input))
+	if err != nil {
+		return reflect.Value{}, err
+	}
+	for _, attr := range attrs {
+		child, ok := m.children[attr.Name]
+		if !ok {
+			continue
+		}
+
+		if err := child.FromAttribute(attr, result.Elem()); err != nil {
+			return reflect.Value{}, err
+		}
+
+		spew.Dump(child)
+	}
+
+	return reflect.Value{}, errors.New("cannot parse multi def")
+
 }

@@ -1,6 +1,7 @@
 package attribs
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -58,4 +59,17 @@ func (d definitionErased) Parse(input string) (reflect.Value, error) {
 	}
 
 	return result, nil
+}
+
+func (d definitionErased) FromAttribute(attribute parser.Attribute, into reflect.Value) error {
+	if !into.CanSet() {
+		return fmt.Errorf("cannot set value of type %v", d.typ)
+	}
+	// create new value from given parsed attributes
+	err := d.attr.Set(into, &parser.Attribute{Attributes: attribute.Children()})
+	if err != nil {
+		return err
+	}
+	return nil
+
 }

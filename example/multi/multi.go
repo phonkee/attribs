@@ -16,11 +16,11 @@ type AttribTwo struct {
 }
 
 type AttribThree struct {
-	Three int `attr:"name=three"`
+	Three int `attr:"name=three_a"`
 }
 
 type AttribFour struct {
-	Four int `attr:"name=four"`
+	Four int `attr:"name=four_a"`
 }
 
 type TagSet struct {
@@ -31,8 +31,9 @@ type TagSet struct {
 }
 
 type Something struct {
-	First bool `my_tag_two:"hello=420"`
-	Other bool `my_tag_one:"default=1" my_tag_two:"hello=42"`
+	First          bool `my_tag_two:"hello=420"`
+	Other          bool `my_tag_one:"default=1" my_tag_two:"hello=42"`
+	Disappointment bool `my_tag:"three(three_a=22), four(four_a=44)"`
 }
 
 func main() {
