@@ -2,9 +2,10 @@ package attribs
 
 import (
 	"fmt"
-	"github.com/phonkee/attribs/parser"
 	"reflect"
 	"strconv"
+
+	"github.com/phonkee/attribs/parser"
 )
 
 type attrType string
@@ -252,7 +253,7 @@ func anyAttr() *attr {
 
 // Set sets value to given target from parser.
 // it returns error if value cannot be set or parsed attribute is invalid
-func (a *attr) Set(target reflect.Value, parsed *parser.Attribute) error {
+func (a *attr) Set(target reflect.Value, parsed *parser.Attribute, ignoreUnknown bool) error {
 	// check if pointer is not nil, we need to provide new value
 	if target.Kind() == reflect.Ptr && target.IsNil() {
 		target.Set(reflect.New(target.Type().Elem()))
@@ -260,25 +261,25 @@ func (a *attr) Set(target reflect.Value, parsed *parser.Attribute) error {
 
 	switch a.Type {
 	case attrTypeArray:
-		return a.setArray(target, parsed)
+		return a.setArray(target, parsed, ignoreUnknown)
 	case attrTypeBoolean:
-		return a.setBoolean(target, parsed)
+		return a.setBoolean(target, parsed, ignoreUnknown)
 	case attrTypeFloat:
-		return a.setFloat(target, parsed)
+		return a.setFloat(target, parsed, ignoreUnknown)
 	case attrTypeInteger:
-		return a.setInteger(target, parsed)
+		return a.setInteger(target, parsed, ignoreUnknown)
 	case attrTypeString:
-		return a.setString(target, parsed)
+		return a.setString(target, parsed, ignoreUnknown)
 	case attrTypeStruct:
-		return a.setStruct(target, parsed)
+		return a.setStruct(target, parsed, ignoreUnknown)
 	case attrTypeMap:
-		return a.setMap(target, parsed)
+		return a.setMap(target, parsed, ignoreUnknown)
 	default:
 		return parser.NewParseError(parsed.Position, "invalid attribute type %v", a.Type)
 	}
 }
 
-func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute) error {
+func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute, ignoreUnknown bool) error {
 	if parsed.Array == nil {
 		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
 	}
@@ -306,7 +307,7 @@ func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute) error {
 		} else {
 			val = reflect.Indirect(reflect.New(target.Type().Elem()))
 
-			if err := a.Elem.Set(val, &item); err != nil {
+			if err := a.Elem.Set(val, &item, ignoreUnknown); err != nil {
 				return fmt.Errorf("cannot set array value for %s: %s", parsed.Name, err)
 			}
 		}
@@ -318,7 +319,7 @@ func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute) error {
 	return nil
 }
 
-func (a *attr) setBoolean(target reflect.Value, parsed *parser.Attribute) error {
+func (a *attr) setBoolean(target reflect.Value, parsed *parser.Attribute, ignoreUnknown bool) error {
 	if parsed.Value == nil || parsed.Value.Boolean == nil {
 		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
 	}
@@ -337,7 +338,7 @@ func (a *attr) setBoolean(target reflect.Value, parsed *parser.Attribute) error 
 	return nil
 }
 
-func (a *attr) setFloat(target reflect.Value, parsed *parser.Attribute) error {
+func (a *attr) setFloat(target reflect.Value, parsed *parser.Attribute, ignoreUnknown bool) error {
 	if parsed.Value == nil || parsed.Value.Number == nil {
 		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
 	}
@@ -350,7 +351,7 @@ func (a *attr) setFloat(target reflect.Value, parsed *parser.Attribute) error {
 
 }
 
-func (a *attr) setInteger(target reflect.Value, parsed *parser.Attribute) error {
+func (a *attr) setInteger(target reflect.Value, parsed *parser.Attribute, ignoreUnknown bool) error {
 	if parsed.Value == nil || parsed.Value.Number == nil {
 		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
 	}
@@ -375,7 +376,7 @@ func (a *attr) setInteger(target reflect.Value, parsed *parser.Attribute) error 
 	return nil
 }
 
-func (a *attr) setMap(target reflect.Value, parsed *parser.Attribute) error {
+func (a *attr) setMap(target reflect.Value, parsed *parser.Attribute, ignoreUnknown bool) error {
 	// check if we really have object type, otherwise it's invalid
 	if parsed.Attributes == nil {
 		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
@@ -403,7 +404,7 @@ func (a *attr) setMap(target reflect.Value, parsed *parser.Attribute) error {
 	return nil
 }
 
-func (a *attr) setString(target reflect.Value, parsed *parser.Attribute) error {
+func (a *attr) setString(target reflect.Value, parsed *parser.Attribute, ignoreUnknown bool) error {
 	if parsed.Value == nil || parsed.Value.String == nil {
 		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
 	}
@@ -416,16 +417,19 @@ func (a *attr) setString(target reflect.Value, parsed *parser.Attribute) error {
 	return nil
 }
 
-func (a *attr) setStruct(target reflect.Value, parsed *parser.Attribute) error {
+func (a *attr) setStruct(target reflect.Value, parsed *parser.Attribute, ignoreUnknown bool) error {
 	// if this was recursive call, we need to check Elem
 	if a.Elem != nil {
-		return a.Elem.setStruct(target, parsed)
+		return a.Elem.setStruct(target, parsed, ignoreUnknown)
 	}
 
 	// TODO: check other than struct types
 	for _, att := range parsed.Attributes {
 		prop, ok := a.Properties[att.Name]
 		if !ok {
+			if ignoreUnknown {
+				continue
+			}
 			return parser.NewParseError(att.Position, "unknown attribute %s", att.Name)
 		}
 		var field reflect.Value
@@ -443,7 +447,7 @@ func (a *attr) setStruct(target reflect.Value, parsed *parser.Attribute) error {
 			field.Set(v)
 		} else {
 			// set property
-			if err := prop.Set(field, &att); err != nil {
+			if err := prop.Set(field, &att, ignoreUnknown); err != nil {
 				return err
 			}
 		}

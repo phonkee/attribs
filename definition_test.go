@@ -1,8 +1,9 @@
 package attribs_test
 
 import (
-	"github.com/phonkee/attribs"
 	"testing"
+
+	"github.com/phonkee/attribs"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -635,6 +636,41 @@ func TestAttrs(t *testing.T) {
 				},
 			},
 		}, got)
+	})
+
+	t.Run("test known", func(t *testing.T) {
+		type Struct struct {
+			ID int `attr:"name=id"`
+		}
+		type Test struct {
+			Metadatass    [][]int     `attr:"name=metadatass"`
+			MetadatassAny [][]any     `attr:"name=metadatass_any"`
+			Structs       [][]*Struct `attr:"name=structs"`
+		}
+		def, err := attribs.New(Test{})
+		assert.NoError(t, err)
+		assert.NotNil(t, def)
+		for _, td := range []struct {
+			name     string
+			input    string
+			expected Test
+			err      error
+		}{
+			{input: "metadatass[[1,2,3]], nonexisting=1, other='nope', structs[[nope]]", expected: Test{
+				Metadatass: [][]int{{1, 2, 3}},
+				Structs:    [][]*Struct{{{}}},
+			}},
+		} {
+			t.Run(td.name, func(t *testing.T) {
+				value, err := def.ParseKnown(td.input)
+				if td.err != nil {
+					assert.ErrorIs(t, err, td.err)
+				} else {
+					assert.NoError(t, err)
+				}
+				assert.Equal(t, td.expected, value)
+			})
+		}
 	})
 
 }

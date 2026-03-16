@@ -1,9 +1,10 @@
 package attribs
 
 import (
-	"github.com/phonkee/attribs/parser"
 	"reflect"
 	"strings"
+
+	"github.com/phonkee/attribs/parser"
 )
 
 const (
@@ -68,7 +69,27 @@ func (d Definition[T]) Parse(input string) (T, error) {
 	result = result.Elem()
 
 	// create new value from given parsed attributes
-	err = d.attr.Set(result, &parser.Attribute{Attributes: attrs})
+	err = d.attr.Set(result, &parser.Attribute{Attributes: attrs}, false)
+	if err != nil {
+		return result.Interface().(T), err
+	}
+
+	return result.Interface().(T), nil
+}
+
+func (d Definition[T]) ParseKnown(input string) (T, error) {
+	typ := reflect.TypeOf(*new(T))
+	result := reflect.New(typ)
+
+	// parse input to attribute tree
+	attrs, err := parser.Parse(strings.NewReader(input))
+	if err != nil {
+		return result.Interface().(T), err
+	}
+	result = result.Elem()
+
+	// create new value from given parsed attributes
+	err = d.attr.Set(result, &parser.Attribute{Attributes: attrs}, true)
 	if err != nil {
 		return result.Interface().(T), err
 	}
