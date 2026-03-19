@@ -45,3 +45,23 @@ func (t Token) String() string {
 		return "UNKNOWN"
 	}
 }
+
+func (t Token) IsError() bool {
+	return t == TokenError
+}
+
+func (t Token) AsError(span *SourceSpan, value string) error {
+	if !t.IsError() {
+		return nil
+	}
+	return NewParseError(span, "%v", value)
+}
+
+func (t Token) OneOf(tokens ...Token) bool {
+	for _, token := range tokens {
+		if t == token {
+			return true
+		}
+	}
+	return false
+}

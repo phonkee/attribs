@@ -10,17 +10,18 @@ import (
 func TestLexer(t *testing.T) {
 	t.Run("test basic values", func(t *testing.T) {
 		data := []struct {
-			inp string
-			tok Token
-			val string
-			pos int
+			inp    string
+			tok    Token
+			val    string
+			pos    int
+			length int
 		}{
-			{inp: "=", tok: TokenEqual},
-			{inp: "", tok: TokenEOF},
-			{inp: "(", tok: TokenOpenBracket},
-			{inp: ")", tok: TokenCloseBracket},
-			{inp: "[", tok: TokenOpenSquareBracket},
-			{inp: "]", tok: TokenCloseSquareBracket},
+			{inp: "=", tok: TokenEqual, length: 1},
+			{inp: "", tok: TokenEOF, length: 1},
+			{inp: "(", tok: TokenOpenBracket, length: 1},
+			{inp: ")", tok: TokenCloseBracket, length: 1},
+			{inp: "[", tok: TokenOpenSquareBracket, length: 1},
+			{inp: "]", tok: TokenCloseSquareBracket, length: 1},
 			{inp: "'hello world'", tok: TokenString, val: "hello world"},
 			{inp: "'hello world", tok: TokenError, pos: 12},
 			{inp: `'hello \' world'`, tok: TokenString, val: "hello ' world"},
@@ -34,8 +35,8 @@ func TestLexer(t *testing.T) {
 		}
 
 		for _, item := range data {
-			pos, token, val := newLexer(strings.NewReader(item.inp)).Lex()
-			assert.Equal(t, item.pos, pos, "inp: %v", item.inp)
+			span, token, val := newLexer(strings.NewReader(item.inp)).Lex()
+			assert.Equal(t, item.pos, span.Position, "inp: %v", item.inp)
 			assert.Equal(t, item.tok, token)
 			assert.Equal(t, item.val, val)
 		}
@@ -55,8 +56,8 @@ func TestLexer(t *testing.T) {
 		}
 
 		for _, item := range data {
-			pos, token, val := newLexer(strings.NewReader(item.inp)).Lex()
-			assert.Equal(t, item.pos, pos, "inp: %v", item.inp)
+			span, token, val := newLexer(strings.NewReader(item.inp)).Lex()
+			assert.Equal(t, item.pos, span.Position, "inp: %v", item.inp)
 			assert.Equal(t, item.tok, token)
 			assert.Equal(t, item.val, val)
 		}
@@ -74,8 +75,8 @@ func TestLexer(t *testing.T) {
 		}
 
 		for _, item := range data {
-			pos, token, _ := newLexer(strings.NewReader(item.inp)).Lex()
-			assert.Equal(t, item.pos, pos, "inp: %v", item.inp)
+			span, token, _ := newLexer(strings.NewReader(item.inp)).Lex()
+			assert.Equal(t, item.pos, span.Position, "inp: %v", item.inp)
 			assert.Equal(t, item.tok, token)
 		}
 	})
@@ -97,12 +98,12 @@ func TestLexer(t *testing.T) {
 		}
 
 		for _, item := range data {
-			pos, token, value := newLexer(strings.NewReader(item.input)).Lex()
+			span, token, value := newLexer(strings.NewReader(item.input)).Lex()
 			if item.errCont != "" {
 				assert.True(t, token == TokenError, "inp: %v", item.input)
 				assert.Contains(t, value, item.errCont)
 			} else {
-				assert.Equal(t, item.pos, pos, "inp: %v", item.input)
+				assert.Equal(t, item.pos, span.Position, "inp: %v", item.input)
 				assert.Equal(t, item.tok, token)
 				assert.Equal(t, item.val, value)
 			}
@@ -127,12 +128,12 @@ func TestLexer(t *testing.T) {
 		}
 
 		for _, item := range data {
-			pos, token, value := newLexer(strings.NewReader(item.input)).Lex()
+			span, token, value := newLexer(strings.NewReader(item.input)).Lex()
 			if item.errCont != "" {
 				assert.True(t, token == TokenError, "inp: %v", item.input)
 				assert.Contains(t, value, item.errCont)
 			} else {
-				assert.Equal(t, item.pos, pos, "inp: %v", item.input)
+				assert.Equal(t, item.pos, span.Position, "inp: %v", item.input)
 				assert.Equal(t, item.tok, token)
 				assert.Equal(t, item.val, value)
 			}

@@ -2,58 +2,95 @@ package parser
 
 import (
 	"bufio"
+	"fmt"
 	"io"
+	"strings"
 	"unicode"
 )
 
 func newLexer(reader io.Reader) *lexer {
+	all, err := io.ReadAll(reader) // read all to get correct EOF position
+	if err != nil {
+		panic(err)
+	}
+	stringContent := string(all)
 	return &lexer{
-		reader: bufio.NewReader(reader),
+		content: stringContent,
+		reader:  bufio.NewReader(strings.NewReader(stringContent)),
 	}
 }
 
 type lexer struct {
-	pos    int
-	reader *bufio.Reader
+	pos     int
+	content string
+	reader  *bufio.Reader
 }
 
-func (l *lexer) Lex() (int, Token, string) {
+// Snapshot returns snapshot which can be used to "rollback to"
+func (l *lexer) Snapshot() *Snapshot {
+	return &Snapshot{
+		pos: l.pos,
+	}
+}
+
+// Rollback to given snapshot
+func (l *lexer) Rollback(to *Snapshot) error {
+	if to.pos > l.pos {
+		return io.EOF
+	}
+	if to.pos == l.pos {
+		return nil
+	}
+	l.reader = bufio.NewReader(strings.NewReader(l.content))
+	disc, err := l.reader.Discard(to.pos)
+	if err != nil {
+		return err
+	}
+	if disc != to.pos {
+		return fmt.Errorf("expected to discard: %d but %d", to.pos, disc)
+	}
+	l.pos = to.pos
+
+	return nil
+}
+
+func (l *lexer) Lex() (*SourceSpan, Token, string) {
 	for {
 		r, err := l.read()
 		pos := l.pos - 1
+		span := newSourceSpan(pos)
 		if err != nil {
 			if err == io.EOF {
-				return pos, TokenEOF, ""
+				return span.withLengthFromPosition(l.pos), TokenEOF, ""
 			}
 			// this should not happen
-			return pos, TokenError, err.Error()
+			return span.withLengthFromPosition(l.pos), TokenError, err.Error()
 		}
 
 		switch r {
 		case '(':
-			return pos, TokenOpenBracket, ""
+			return span.withLength(1), TokenOpenBracket, "("
 		case ')':
-			return pos, TokenCloseBracket, ""
+			return span.withLength(1), TokenCloseBracket, ")"
 		case '[':
-			return pos, TokenOpenSquareBracket, ""
+			return span.withLength(1), TokenOpenSquareBracket, "["
 		case ']':
-			return pos, TokenCloseSquareBracket, ""
+			return span.withLength(1), TokenCloseSquareBracket, "]"
 		case '=':
-			return pos, TokenEqual, ""
+			return span.withLength(1), TokenEqual, "="
 		case ',':
-			return pos, TokenComma, ""
+			return span.withLength(1), TokenComma, ","
 		case '"':
 			str := ""
-			pos := l.pos - 1
 		outer2:
 			for {
 				r, err := l.read()
 				if err != nil {
 					if err == io.EOF {
-						return l.pos - 1, TokenError, ""
+						return newSourceSpan(l.pos - 1), TokenError, ""
 					}
 					// this should not happen
-					return l.pos - 1, TokenError, err.Error()
+					return span.withLengthFromPosition(l.pos), TokenError, err.Error()
 				}
 
 				switch {
@@ -61,7 +98,7 @@ func (l *lexer) Lex() (int, Token, string) {
 					pr, errp := l.read()
 					if errp != nil {
 						if errp == io.EOF {
-							return l.pos - 1, TokenError, str
+							return span.withLengthFromPosition(l.pos), TokenError, str
 						}
 					}
 					switch pr {
@@ -74,7 +111,7 @@ func (l *lexer) Lex() (int, Token, string) {
 				}
 
 				if r == '"' {
-					return pos, TokenString, str
+					return span.withLengthFromPosition(l.pos), TokenString, str
 				}
 
 				str += string(r)
@@ -82,16 +119,15 @@ func (l *lexer) Lex() (int, Token, string) {
 
 		case '\'':
 			str := ""
-			pos := l.pos - 1
 		outer:
 			for {
 				r, err := l.read()
 				if err != nil {
 					if err == io.EOF {
-						return l.pos - 1, TokenError, ""
+						return newSourceSpan(l.pos - 1), TokenError, ""
 					}
 					// this should not happen
-					return l.pos - 1, TokenError, err.Error()
+					return newSourceSpan(l.pos - 1), TokenError, err.Error()
 				}
 
 				switch {
@@ -99,7 +135,7 @@ func (l *lexer) Lex() (int, Token, string) {
 					pr, errp := l.read()
 					if errp != nil {
 						if errp == io.EOF {
-							return l.pos - 1, TokenError, str
+							return newSourceSpan(l.pos - 1), TokenError, str
 						}
 					}
 					switch pr {
@@ -113,11 +149,11 @@ func (l *lexer) Lex() (int, Token, string) {
 						l.unread()
 					}
 				case r == '\'':
-					return pos, TokenString, str
+					return span.withLengthFromPosition(l.pos), TokenString, str
 				}
 
 				if r == '\'' {
-					return pos, TokenString, str
+					return span.withLengthFromPosition(l.pos), TokenString, str
 				}
 
 				str += string(r)
@@ -132,13 +168,13 @@ func (l *lexer) Lex() (int, Token, string) {
 					r, err := l.read()
 					if err != nil {
 						if err == io.EOF {
-							return l.pos - 1, TokenError, "found minus sign at EOF"
+							return newSourceSpan(l.pos - 1), TokenError, "found minus sign at EOF"
 						}
-						return l.pos - 1, TokenError, err.Error()
+						return newSourceSpan(l.pos - 1), TokenError, err.Error()
 					}
 					l.unread()
 					if !(unicode.IsDigit(r) || r == '.') {
-						return l.pos - 1, TokenString, ""
+						return span.withLengthFromPosition(l.pos - 1), TokenString, ""
 					}
 
 					if r == '.' {
@@ -146,22 +182,23 @@ func (l *lexer) Lex() (int, Token, string) {
 					}
 				}
 
+				span = span.withLengthFromPosition(l.pos)
 				var foundDot = r == '.'
 
 				for {
-					r, err := l.read()
+					r, err = l.read()
 					if err != nil {
 						if err == io.EOF {
 							break
 						}
-						return l.pos - 1, TokenError, err.Error()
+						return newSourceSpan(l.pos - 1), TokenError, err.Error()
 					}
 
 					if unicode.IsNumber(r) {
 						str += string(r)
 					} else if r == '.' {
 						if foundDot {
-							return l.pos - 1, TokenError, "found multiple dots in number"
+							return newSourceSpan(l.pos - 1), TokenError, "found multiple dots in number"
 						}
 						foundDot = true
 						str += string(r)
@@ -169,8 +206,9 @@ func (l *lexer) Lex() (int, Token, string) {
 						l.unread()
 						break
 					}
+					span = span.withLengthFromPosition(l.pos)
 				}
-				return pos, TokenNumber, str
+				return span, TokenNumber, str
 			}
 			if unicode.IsLetter(r) {
 				str := string(r)
@@ -181,17 +219,18 @@ func (l *lexer) Lex() (int, Token, string) {
 						if err == io.EOF {
 							break
 						}
-						return pos, TokenError, err.Error()
+						return newSourceSpan(l.pos), TokenError, err.Error()
 					}
 
 					if unicode.IsNumber(r) || unicode.IsLetter(r) || r == '_' {
 						str += string(r)
+						span = span.withLengthFromPosition(l.pos)
 					} else {
 						l.unread()
 						break
 					}
 				}
-				return pos, TokenIdent, str
+				return span, TokenIdent, str
 			}
 		}
 	}
@@ -212,4 +251,13 @@ func (l *lexer) read() (rune, error) {
 func (l *lexer) unread() {
 	_ = l.reader.UnreadRune()
 	l.pos--
+}
+
+// Snapshot taken in time
+type Snapshot struct {
+	pos int
+}
+
+func (s *Snapshot) Rollback(p *parser) error {
+	return p.lexer.Rollback(s)
 }

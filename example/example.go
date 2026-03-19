@@ -13,11 +13,11 @@ var (
 )
 
 type Some struct {
-	//Field  string `extag:"name=field, description='yeah this works'"`
-	Field2 string `extag:"name=field2, description=\"no this doesn't\", other=1"`
+	Field  string `extag:"name=field, description='yeah this works'"`
+	Field2 string `extag:"name=field2, description=\"no this doesn't\", other=1, ignore=true"`
 }
 
 func main() {
-	attribs.Debug[Attribs, Some]("extag", Some{})
+	attribs.Debug[Attribs, Some]("extag", Some{}, true)
 
 }

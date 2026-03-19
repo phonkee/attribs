@@ -138,7 +138,7 @@ func inspect(what any, c ...map[reflect.Type]*attr) (*attr, error) {
 			}
 
 			// parse attribs tag first
-			pa, err := parseAttribsTag(fieldType.Tag.Get(TagName))
+			pa, err := parseAttribsTag(fieldType.Tag.Get(TagName), true)
 			if err != nil {
 				return nil, err
 			}
@@ -275,13 +275,13 @@ func (a *attr) Set(target reflect.Value, parsed *parser.Attribute, ignoreUnknown
 	case attrTypeMap:
 		return a.setMap(target, parsed, ignoreUnknown)
 	default:
-		return parser.NewParseError(parsed.Position, "invalid attribute type %v", a.Type)
+		return parser.NewParseError(parsed.Span, "invalid attribute type %v", a.Type)
 	}
 }
 
 func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute, ignoreUnknown bool) error {
 	if parsed.Array == nil {
-		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+		return parser.NewParseError(parsed.Span, "invalid value for %s", parsed.Name)
 	}
 
 	if target.Kind() == reflect.Ptr {
@@ -321,13 +321,13 @@ func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute, ignoreUn
 
 func (a *attr) setBoolean(target reflect.Value, parsed *parser.Attribute, ignoreUnknown bool) error {
 	if parsed.Value == nil || parsed.Value.Boolean == nil {
-		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+		return parser.NewParseError(parsed.Span, "invalid value for %s", parsed.Name)
 	}
 
 	val := *parsed.Value.Boolean
 
 	if val != "true" && val != "false" {
-		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+		return parser.NewParseError(parsed.Span, "invalid value for %s", parsed.Name)
 	}
 
 	// we know it's correct
@@ -340,10 +340,10 @@ func (a *attr) setBoolean(target reflect.Value, parsed *parser.Attribute, ignore
 
 func (a *attr) setFloat(target reflect.Value, parsed *parser.Attribute, ignoreUnknown bool) error {
 	if parsed.Value == nil || parsed.Value.Number == nil {
-		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+		return parser.NewParseError(parsed.Span, "invalid value for %s", parsed.Name)
 	}
 	if value, err := strconv.ParseFloat(*parsed.Value.Number, 64); err != nil {
-		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+		return parser.NewParseError(parsed.Span, "invalid value for %s", parsed.Name)
 	} else {
 		target.SetFloat(value)
 	}
@@ -353,7 +353,7 @@ func (a *attr) setFloat(target reflect.Value, parsed *parser.Attribute, ignoreUn
 
 func (a *attr) setInteger(target reflect.Value, parsed *parser.Attribute, ignoreUnknown bool) error {
 	if parsed.Value == nil || parsed.Value.Number == nil {
-		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+		return parser.NewParseError(parsed.Span, "invalid value for %s", parsed.Name)
 	}
 
 	if target.Kind() == reflect.Ptr {
@@ -363,13 +363,13 @@ func (a *attr) setInteger(target reflect.Value, parsed *parser.Attribute, ignore
 	if a.Signed {
 		val, err := strconv.ParseInt(*parsed.Value.Number, 10, 64)
 		if err != nil {
-			return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+			return parser.NewParseError(parsed.Span, "invalid value for %s", parsed.Name)
 		}
 		target.SetInt(val)
 	} else {
 		val, err := strconv.ParseUint(*parsed.Value.Number, 10, 64)
 		if err != nil {
-			return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+			return parser.NewParseError(parsed.Span, "invalid value for %s", parsed.Name)
 		}
 		target.SetUint(val)
 	}
@@ -378,8 +378,8 @@ func (a *attr) setInteger(target reflect.Value, parsed *parser.Attribute, ignore
 
 func (a *attr) setMap(target reflect.Value, parsed *parser.Attribute, ignoreUnknown bool) error {
 	// check if we really have object type, otherwise it's invalid
-	if parsed.Attributes == nil {
-		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+	if parsed.Object == nil {
+		return parser.NewParseError(parsed.Span, "invalid value for %s", parsed.Name)
 	}
 
 	// check if target is nil (map is not initialized)
@@ -406,7 +406,7 @@ func (a *attr) setMap(target reflect.Value, parsed *parser.Attribute, ignoreUnkn
 
 func (a *attr) setString(target reflect.Value, parsed *parser.Attribute, ignoreUnknown bool) error {
 	if parsed.Value == nil || parsed.Value.String == nil {
-		return parser.NewParseError(parsed.Position, "invalid value for %s", parsed.Name)
+		return parser.NewParseError(parsed.Span, "invalid value for %s", parsed.Name)
 	}
 	if target.Kind() == reflect.Ptr {
 		target = target.Elem()
@@ -424,13 +424,13 @@ func (a *attr) setStruct(target reflect.Value, parsed *parser.Attribute, ignoreU
 	}
 
 	// TODO: check other than struct types
-	for _, att := range parsed.Attributes {
+	for _, att := range parsed.Object {
 		prop, ok := a.Properties[att.Name]
 		if !ok {
 			if ignoreUnknown {
 				continue
 			}
-			return parser.NewParseError(att.Position, "unknown attribute %s", att.Name)
+			return parser.NewParseError(att.Span, "unknown attribute %s", att.Name)
 		}
 		var field reflect.Value
 		if target.Kind() == reflect.Ptr {
