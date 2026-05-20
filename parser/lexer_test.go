@@ -323,8 +323,8 @@ func TestLexerExtended(t *testing.T) {
 			{inp: "hello", tok: TokenIdent, val: "hello"},
 			{inp: "Hello123", tok: TokenIdent, val: "Hello123"},
 			{inp: "hello_world", tok: TokenIdent, val: "hello_world"},
-			// documented behavior: leading underscore is not a valid start character and is silently skipped
-			{inp: "_hello", tok: TokenIdent, val: "hello"},
+			{inp: "_hello", tok: TokenIdent, val: "_hello"},
+			{inp: "__private", tok: TokenIdent, val: "__private"},
 			{inp: "true", tok: TokenIdent, val: "true"}, // lexer emits Ident; the parser handles boolean semantics
 			{inp: "false", tok: TokenIdent, val: "false"},
 			{inp: "a", tok: TokenIdent, val: "a"},

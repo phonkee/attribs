@@ -217,7 +217,7 @@ func (l *lexer) Lex() (*SourceSpan, Token, string) {
 				}
 				return span, TokenNumber, str
 			}
-			if unicode.IsLetter(r) {
+			if unicode.IsLetter(r) || r == '_' {
 				str := string(r)
 
 				for {

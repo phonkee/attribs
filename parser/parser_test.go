@@ -333,6 +333,197 @@ func TestParse(t *testing.T) {
 		_, err := Parse(strings.NewReader("a[[1, 2]"))
 		assert.Error(t, err)
 	})
+
+	// ── additional edge cases ──────────────────────────────────────────────────
+
+	t.Run("error_unclosed_object", func(t *testing.T) {
+		_, err := Parse(strings.NewReader("a(b=1"))
+		assert.Error(t, err)
+	})
+
+	t.Run("error_stray_close_bracket", func(t *testing.T) {
+		_, err := Parse(strings.NewReader("a=1)"))
+		assert.Error(t, err)
+	})
+
+	t.Run("error_stray_close_square_bracket", func(t *testing.T) {
+		_, err := Parse(strings.NewReader("a=1]"))
+		assert.Error(t, err)
+	})
+
+	t.Run("error_trailing_comma_top_level", func(t *testing.T) {
+		_, err := Parse(strings.NewReader("a=1,"))
+		assert.Error(t, err)
+	})
+
+	t.Run("error_equals_without_key", func(t *testing.T) {
+		_, err := Parse(strings.NewReader("=1"))
+		assert.Error(t, err)
+	})
+
+	t.Run("double_quoted_string_with_newline_escape", func(t *testing.T) {
+		a := topAttrs(mustParse(t, `s="line1\nline2"`))
+		require.Len(t, a, 1)
+		require.NotNil(t, a[0].Value)
+		assert.Equal(t, ptr("line1\nline2"), a[0].Value.String)
+	})
+
+	t.Run("single_quoted_string_with_escaped_quote", func(t *testing.T) {
+		a := topAttrs(mustParse(t, `s='it\'s fine'`))
+		require.Len(t, a, 1)
+		require.NotNil(t, a[0].Value)
+		assert.Equal(t, ptr("it's fine"), a[0].Value.String)
+	})
+
+	t.Run("key_with_underscore", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "my_key=1"))
+		require.Len(t, a, 1)
+		assert.Equal(t, "my_key", a[0].Name)
+		assert.Equal(t, ptr("1"), a[0].Value.Number)
+	})
+
+	t.Run("key_with_leading_underscores", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "__private=true"))
+		require.Len(t, a, 1)
+		assert.Equal(t, "__private", a[0].Name)
+	})
+
+	t.Run("key_alphanumeric", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "field123=42"))
+		require.Len(t, a, 1)
+		assert.Equal(t, "field123", a[0].Name)
+	})
+
+	t.Run("float_with_leading_dot", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "f=.5"))
+		require.Len(t, a, 1)
+		assert.Equal(t, ptr(".5"), a[0].Value.Number)
+	})
+
+	t.Run("large_integer", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "n=1000000"))
+		require.Len(t, a, 1)
+		assert.Equal(t, ptr("1000000"), a[0].Value.Number)
+	})
+
+	t.Run("zero", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "n=0"))
+		require.Len(t, a, 1)
+		assert.Equal(t, ptr("0"), a[0].Value.Number)
+	})
+
+	t.Run("negative_float", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "v=-3.14"))
+		require.Len(t, a, 1)
+		assert.Equal(t, ptr("-3.14"), a[0].Value.Number)
+	})
+
+	t.Run("array_single_item", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "x[42]"))
+		require.Len(t, a, 1)
+		require.NotNil(t, a[0].Array)
+		assert.Len(t, a[0].Array.Attributes, 1)
+		assert.Equal(t, ptr("42"), a[0].Array.Attributes[0].Value.Number)
+	})
+
+	t.Run("array_boolean_items", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "flags[true, false, true]"))
+		items := a[0].Array.Attributes
+		require.Len(t, items, 3)
+		assert.Equal(t, ptr("true"), items[0].Value.Boolean)
+		assert.Equal(t, ptr("false"), items[1].Value.Boolean)
+		assert.Equal(t, ptr("true"), items[2].Value.Boolean)
+	})
+
+	t.Run("object_with_multiple_flags", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "opts(a, b, c)"))
+		require.Len(t, a, 1)
+		inner := a[0].Object.Attributes
+		require.Len(t, inner, 3)
+		for i, name := range []string{"a", "b", "c"} {
+			assert.Equal(t, name, inner[i].Name)
+			assert.Equal(t, ptr("true"), inner[i].Value.Boolean)
+		}
+	})
+
+	t.Run("deeply_nested_array_in_object", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "cfg(ids[1, 2, 3], name='x')"))
+		require.Len(t, a, 1)
+		inner := a[0].Object.Attributes
+		require.Len(t, inner, 2)
+		assert.Equal(t, "ids", inner[0].Name)
+		require.NotNil(t, inner[0].Array)
+		assert.Len(t, inner[0].Array.Attributes, 3)
+		assert.Equal(t, "name", inner[1].Name)
+		assert.Equal(t, ptr("x"), inner[1].Value.String)
+	})
+
+	t.Run("array_of_arrays_of_objects", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "m[[(x=1)], [(x=2)]]"))
+		require.Len(t, a, 1)
+		outer := a[0].Array.Attributes
+		require.Len(t, outer, 2)
+		inner0 := outer[0].Array.Attributes
+		require.Len(t, inner0, 1)
+		require.NotNil(t, inner0[0].Object)
+		assert.Equal(t, ptr("1"), inner0[0].Object.Attributes[0].Value.Number)
+	})
+
+	t.Run("whitespace_inside_array", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "x[  1  ,  2  ,  3  ]"))
+		require.NotNil(t, a[0].Array)
+		assert.Len(t, a[0].Array.Attributes, 3)
+	})
+
+	t.Run("whitespace_inside_object", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "o(  a = 1  ,  b = 2  )"))
+		require.NotNil(t, a[0].Object)
+		assert.Len(t, a[0].Object.Attributes, 2)
+	})
+
+	t.Run("string_with_spaces_double_quoted", func(t *testing.T) {
+		a := topAttrs(mustParse(t, `desc="hello world foo"`))
+		require.Len(t, a, 1)
+		assert.Equal(t, ptr("hello world foo"), a[0].Value.String)
+	})
+
+	t.Run("positional_string_then_number", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "'hello', 42"))
+		require.Len(t, a, 2)
+		assert.Equal(t, ptr("hello"), a[0].Value.String)
+		assert.Equal(t, ptr("42"), a[1].Value.Number)
+	})
+
+	t.Run("many_nested_objects", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "a(b(c(d(e=1))))"))
+		require.Len(t, a, 1)
+		assert.Equal(t, "a", a[0].Name)
+		b := a[0].Object.Attributes
+		require.Len(t, b, 1)
+		assert.Equal(t, "b", b[0].Name)
+		c := b[0].Object.Attributes
+		require.Len(t, c, 1)
+		assert.Equal(t, "c", c[0].Name)
+		d := c[0].Object.Attributes
+		require.Len(t, d, 1)
+		assert.Equal(t, "d", d[0].Name)
+		e := d[0].Object.Attributes
+		require.Len(t, e, 1)
+		assert.Equal(t, "e", e[0].Name)
+		assert.Equal(t, ptr("1"), e[0].Value.Number)
+	})
+
+	t.Run("empty_string_double_quoted", func(t *testing.T) {
+		a := topAttrs(mustParse(t, `s=""`))
+		require.Len(t, a, 1)
+		assert.Equal(t, ptr(""), a[0].Value.String)
+	})
+
+	t.Run("empty_string_single_quoted", func(t *testing.T) {
+		a := topAttrs(mustParse(t, "s=''"))
+		require.Len(t, a, 1)
+		assert.Equal(t, ptr(""), a[0].Value.String)
+	})
 }
 
 // ─── TestMustParse ────────────────────────────────────────────────────────────
