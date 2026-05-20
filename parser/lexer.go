@@ -42,12 +42,19 @@ func (l *lexer) Rollback(to *Snapshot) error {
 		return nil
 	}
 	l.reader = bufio.NewReader(strings.NewReader(l.content))
-	disc, err := l.reader.Discard(to.pos)
+	// to.pos may exceed len(content) by one when an identifier/number read
+	// consumed EOF and incremented l.pos past the end of the string. Clamp
+	// the discard amount so that bufio.Discard does not hit EOF mid-stream.
+	discardTo := to.pos
+	if discardTo > len(l.content) {
+		discardTo = len(l.content)
+	}
+	disc, err := l.reader.Discard(discardTo)
 	if err != nil {
 		return err
 	}
-	if disc != to.pos {
-		return fmt.Errorf("expected to discard: %d but %d", to.pos, disc)
+	if disc != discardTo {
+		return fmt.Errorf("expected to discard: %d but %d", discardTo, disc)
 	}
 	l.pos = to.pos
 

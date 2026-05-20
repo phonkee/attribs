@@ -1,3 +1,27 @@
+/*
+ * MIT License
+ * Copyright (c) 2023 Peter Vrba
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in the
+ * Software without restriction, including without limitation the rights to use, copy,
+ * modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+ * and to permit persons to whom the Software is furnished to do so, subject to the
+ * following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+
 package parser
 
 import (
@@ -24,19 +48,18 @@ func (p *parser) currentSpan() *SourceSpan {
 
 func (p *parser) parseV2Object() (*Attributes, error) {
 	currentSpan := p.currentSpan()
-	if _, _, _, err := p.LexSelected(TokenOpenBracket); err != nil {
-		if errors.Is(err, ErrNoMatch) {
-			return nil, ErrNotObject
-		}
+
+	if _, err := p.lexV2MatchMap(ErrNotObject, TokenOpenBracket); err != nil {
 		return nil, err
 	}
+
 	result := newAttributes(currentSpan)
-	if _, _, _, err := p.LexSelected(TokenCloseBracket); err != nil {
-		if !errors.Is(err, ErrNoMatch) {
-			return nil, err
-		}
-	} else {
+
+	// Empty object: ()
+	if _, err := p.lexV2Match(TokenCloseBracket); err == nil {
 		return result, nil
+	} else if !ErrIsNoMatch(err) {
+		return nil, err
 	}
 
 	obj, err := p.parseV2ObjectAttributes()
@@ -52,33 +75,36 @@ func (p *parser) parseV2Object() (*Attributes, error) {
 func (p *parser) parseV2ObjectAttributes() (*Attributes, error) {
 	currentSpan := p.currentSpan()
 	result := newAttributes(currentSpan)
-	var canComma bool
+
+	var isInitial bool = true
 
 outer:
 	for {
-		pi, err := p.lexV2MatchMap(ErrNotObjectAttribute, TokenIdent, TokenComma, TokenCloseBracket)
+		pi, err := p.lexV2()
 		if err != nil {
 			return nil, err
 		}
-		switch pi.Token {
-		case TokenComma:
-			if canComma {
-				canComma = false
-				continue outer
-			}
-			return nil, fmt.Errorf("unexpected comma at position %d", currentSpan.Position)
-		case TokenIdent:
-			_ = pi.Rollback()
-			akv, err := p.parseV2ObjectAttributeKeyValue()
-			if err != nil {
-				return result, err
-			}
-			result.Push(akv)
-			canComma = true
-		case TokenCloseBracket:
-			_ = pi.Rollback()
+
+		// CloseBracket ends a nested object; EOF ends top-level input.
+		if pi.Token == TokenCloseBracket || pi.Token == TokenEOF {
 			break outer
 		}
+
+		if isInitial {
+			isInitial = false
+			// Put the token back so parseV2ObjectAttributeKeyValue can read it.
+			_ = pi.Rollback()
+		} else {
+			if pi.Token != TokenComma {
+				return nil, fmt.Errorf("expected comma but found %s", pi.Token.String())
+			}
+		}
+
+		akv, err := p.parseV2ObjectAttributeKeyValue()
+		if err != nil {
+			return result, err
+		}
+		result.Push(akv)
 	}
 
 	return result, nil
@@ -88,6 +114,10 @@ func (p *parser) parseV2ObjectAttributeKeyValue() (*Attribute, error) {
 	currentSpan := p.currentSpan()
 	pi, err := p.lexV2Match(TokenIdent)
 	if err != nil {
+		if ErrIsNoMatch(err) {
+			// No identifier — try to parse a positional value.
+			return p.parseV2PositionalValue()
+		}
 		return nil, NewParseError(currentSpan, "%v: unexpected tok", err)
 	}
 
@@ -100,7 +130,10 @@ func (p *parser) parseV2ObjectAttributeKeyValue() (*Attribute, error) {
 	pi, err = p.lexV2Match(TokenOpenBracket, TokenOpenSquareBracket, TokenEqual)
 	if err != nil {
 		if ErrIsNoMatch(err) {
-			return nil, NewParseError(result.Span, "%v: unexpected tok", err)
+			// Boolean flag: bare identifier with no =, (, or [.
+			trueStr := "true"
+			result.Value = &Value{Span: result.Span, Boolean: &trueStr, String: &trueStr}
+			return result, nil
 		}
 		return nil, err
 	}
@@ -152,64 +185,42 @@ func (p *parser) parseV2SimpleValue() (*Value, error) {
 }
 
 func (p *parser) parseV2Array() (*Attributes, error) {
-	item, err := p.lexV2MatchMap(ErrNotArray, TokenOpenSquareBracket)
+	open, err := p.lexV2MatchMap(ErrNotArray, TokenOpenSquareBracket)
 	if err != nil {
 		return nil, err
 	}
-	result := newAttributes(item.Span)
+	result := newAttributes(open.Span)
 
-	var (
-		arrayItem *Attribute
-		canComma  bool
-	)
-
-	var initial *ParserItem
-
-	piList, errPiList := p.match(MatchToken(TokenIdent, TokenCloseSquareBracket))
-	if errPiList != nil {
-		return nil, NewParseError(item.Span, "%v: unexpected what piList", errPiList)
+	// Empty array.
+	if _, err = p.lexV2Match(TokenCloseSquareBracket); err == nil {
+		return result, nil
+	} else if !ErrIsNoMatch(err) {
+		return nil, NewParseError(open.Span, "unexpected token in array: %v", err)
 	}
-	initial = piList[0]
 
-outer:
+	// First item (no leading comma).
+	first, err := p.parseArrayV2Item()
+	if err != nil {
+		return nil, NewParseError(open.Span, "expected array item: %v", err)
+	}
+	result.Push(first)
+
+	// Subsequent items, each preceded by a comma.
 	for {
-
-		var current *ParserItem
-		if initial != nil {
-			current = initial
-			initial = nil
-		}
-
-		if current == nil {
-			p.match(
-				MatchToken(TokenCloseSquareBracket),
-			)
-		}
-
-		//ai, errAi := p.lexV2Match(TokenCloseSquareBracket, TokenComma)
-		//if errAi != nil {
-		//	if !ErrIsNoMatch(errAi) {
-		//		return nil, errAi
-		//	}
-		//}
-		//
-		switch current.Token {
-		case TokenComma:
-			if canComma {
-				canComma = false
-				continue
-			}
-			return nil, NewParseError(item.Span, "unexpected comma at position %d", item.Span.Position)
-		case TokenCloseSquareBracket:
-			break outer
-		}
-
-		arrayItem, err = p.parseArrayV2Item()
+		pi, err := p.lexV2Match(TokenCloseSquareBracket, TokenComma)
 		if err != nil {
-			return nil, err
+			return nil, NewParseError(open.Span, "expected ',' or ']': %v", err)
 		}
-		result.Push(arrayItem)
+		if pi.Token == TokenCloseSquareBracket {
+			break
+		}
+		next, err := p.parseArrayV2Item()
+		if err != nil {
+			return nil, NewParseError(open.Span, "expected array item after ',': %v", err)
+		}
+		result.Push(next)
 	}
+
 	return result, nil
 }
 
@@ -226,6 +237,17 @@ func (p *parser) parseArrayV2Item() (*Attribute, error) {
 		}, nil
 	}
 
+	if arr, errArray := p.parseV2Array(); errArray != nil {
+		if !errors.Is(errArray, ErrNotArray) {
+			return nil, errArray
+		}
+	} else {
+		return &Attribute{
+			Span:  span.withLengthFromPosition(p.currentPos()),
+			Array: arr,
+		}, nil
+	}
+
 	if object, errObject := p.parseV2Object(); errObject != nil {
 		if !errors.Is(errObject, ErrNotObject) {
 			return nil, errObject
@@ -238,6 +260,32 @@ func (p *parser) parseArrayV2Item() (*Attribute, error) {
 	}
 
 	return nil, fmt.Errorf("%w: yep", ErrNotArrayItem)
+}
+
+// parseV2PositionalValue parses a value with no key name (positional argument).
+// Accepted forms: string literal, number, [array], (object).
+func (p *parser) parseV2PositionalValue() (*Attribute, error) {
+	span := p.currentSpan()
+
+	if sv, err := p.parseV2SimpleValue(); err == nil {
+		return &Attribute{Span: span.withLengthFromPosition(p.currentPos()), Value: sv}, nil
+	} else if !errors.Is(err, ErrNotValue) {
+		return nil, err
+	}
+
+	if arr, err := p.parseV2Array(); err == nil {
+		return &Attribute{Span: span.withLengthFromPosition(p.currentPos()), Array: arr}, nil
+	} else if !errors.Is(err, ErrNotArray) {
+		return nil, err
+	}
+
+	if obj, err := p.parseV2Object(); err == nil {
+		return &Attribute{Span: span.withLengthFromPosition(p.currentPos()), Object: obj}, nil
+	} else if !errors.Is(err, ErrNotObject) {
+		return nil, err
+	}
+
+	return nil, NewParseError(span, "expected positional value (string, number, array, or object)")
 }
 
 // Lex returns next tok from lexer
@@ -279,4 +327,12 @@ func (p *parser) peekV2Match(selected ...Token) bool {
 		return false
 	}
 	return result != nil
+}
+
+func (p *parser) dbgPrint() {
+	span := p.currentSpan()
+
+	println("first", p.lexer.content[:span.Position])
+	println("remaining", p.lexer.content[span.Position:])
+
 }

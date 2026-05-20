@@ -12,6 +12,7 @@ func TestParseAttribsTag(t *testing.T) {
 			Name:     name,
 			Alias:    name,
 			Required: required,
+			Position: -1,
 		}
 	}
 

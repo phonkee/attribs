@@ -59,17 +59,16 @@ type Definition[T any] struct {
 // Parse parses string with attributes into given type
 func (d Definition[T]) Parse(input string, ignoreUnknown bool) (T, error) {
 	typ := reflect.TypeOf(*new(T))
-	result := reflect.New(typ)
+	result := reflect.New(typ).Elem()
 
 	// parse input to attribute tree
 	attrs, err := parser.Parse(strings.NewReader(input))
 	if err != nil {
 		return result.Interface().(T), err
 	}
-	result = result.Elem()
 
 	// create new value from given parsed attributes
-	err = d.attr.Set(result, &parser.Attribute{Object: attrs}, ignoreUnknown)
+	err = d.attr.Set(result, attrs, ignoreUnknown)
 	if err != nil {
 		return result.Interface().(T), err
 	}

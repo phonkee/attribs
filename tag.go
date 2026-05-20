@@ -9,13 +9,18 @@ import (
 
 // parseAttribsTag parses attribs tag
 func parseAttribsTag(tag string, skipUnknown bool) (result attrAttribs, _ error) {
+	result.Position = -1
+
 	parsed, err := parser.Parse(strings.NewReader(tag))
 	if err != nil {
 		return result, err
 	}
 
-	// TODO: add validation
-	for _, attr := range parsed {
+	if parsed.Object == nil {
+		return result, nil
+	}
+
+	for _, attr := range parsed.Object.Attributes {
 		switch attr.Name {
 		case "name":
 			if result.Name, err = attr.Value.AsTrimmedString(); err != nil {
@@ -30,6 +35,13 @@ func parseAttribsTag(tag string, skipUnknown bool) (result attrAttribs, _ error)
 			if result.Required, err = attr.Value.AsBool(); err != nil {
 				return result, fmt.Errorf("%w: required not boolean", ErrInvalidTag)
 			}
+		case "pos":
+			pos, err := attr.Value.AsInt()
+			if err != nil {
+				return result, fmt.Errorf("%w: pos must be an integer", ErrInvalidTag)
+			}
+			result.Position = pos
+			result.IsPositional = true
 		default:
 			if !skipUnknown {
 				return result, fmt.Errorf("%w: %v", ErrInvalidTag, attr.Name)
@@ -37,15 +49,21 @@ func parseAttribsTag(tag string, skipUnknown bool) (result attrAttribs, _ error)
 		}
 	}
 
+	if err = result.Validate(); err != nil {
+		return result, err
+	}
+
 	return result, nil
 }
 
 // attrAttribs holds information about defined attribute
 type attrAttribs struct {
-	Alias    string
-	Name     string
-	Disabled bool
-	Required bool
+	Alias        string
+	Name         string
+	Disabled     bool
+	Required     bool
+	Position     int // -1 = not positional
+	IsPositional bool
 }
 
 func (a attrAttribs) Validate() error {
@@ -64,7 +82,11 @@ func parseAttribsTagDisabled(tag string) (result bool, _ error) {
 		return result, err
 	}
 
-	for _, attr := range parsed {
+	if parsed.Object == nil {
+		return result, nil
+	}
+
+	for _, attr := range parsed.Object.Attributes {
 		switch attr.Name {
 		case "disabled":
 			if result, err = attr.Value.AsBool(); err != nil {

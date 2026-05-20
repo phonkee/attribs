@@ -137,10 +137,13 @@ func inspect(what any, c ...map[reflect.Type]*attr) (*attr, error) {
 				return nil, err
 			}
 
-			// parse attribs tag first
-			pa, err := parseAttribsTag(fieldType.Tag.Get(TagName), true)
-			if err != nil {
-				return nil, err
+			// parse attribs tag first — only when the tag is actually present
+			pa := attrAttribs{Position: -1}
+			if tagStr, hasTag := fieldType.Tag.Lookup(TagName); hasTag {
+				pa, err = parseAttribsTag(tagStr, true)
+				if err != nil {
+					return nil, err
+				}
 			}
 
 			// skip disabled fields
@@ -172,6 +175,10 @@ func inspect(what any, c ...map[reflect.Type]*attr) (*attr, error) {
 			if fieldAttr.Alias == "" {
 				fieldAttr.Alias = fieldAttr.Name
 			}
+
+			// positional support
+			fieldAttr.Position = pa.Position
+			fieldAttr.IsPositional = pa.IsPositional
 
 			// add field attribute to struct properties
 			result.Properties[fieldAttr.Alias] = fieldAttr
@@ -240,6 +247,10 @@ type attr struct {
 	// struct properties
 	Properties map[string]*attr
 
+	// Positional argument support: Position >= 0 when the field accepts a positional arg.
+	Position     int
+	IsPositional bool
+
 	// Parent for better debugging
 	Parent *attr
 }
@@ -294,7 +305,7 @@ func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute, ignoreUn
 	}
 
 	// iterate over all values and set one by one
-	for _, item := range parsed.Array {
+	for _, item := range parsed.Array.Attributes {
 		var (
 			err error
 			val reflect.Value
@@ -307,7 +318,7 @@ func (a *attr) setArray(target reflect.Value, parsed *parser.Attribute, ignoreUn
 		} else {
 			val = reflect.Indirect(reflect.New(target.Type().Elem()))
 
-			if err := a.Elem.Set(val, &item, ignoreUnknown); err != nil {
+			if err := a.Elem.Set(val, item, ignoreUnknown); err != nil {
 				return fmt.Errorf("cannot set array value for %s: %s", parsed.Name, err)
 			}
 		}
@@ -423,15 +434,43 @@ func (a *attr) setStruct(target reflect.Value, parsed *parser.Attribute, ignoreU
 		return a.Elem.setStruct(target, parsed, ignoreUnknown)
 	}
 
-	// TODO: check other than struct types
-	for _, att := range parsed.Object {
-		prop, ok := a.Properties[att.Name]
-		if !ok {
-			if ignoreUnknown {
-				continue
-			}
-			return parser.NewParseError(att.Span, "unknown attribute %s", att.Name)
+	if parsed.Object == nil {
+		if ignoreUnknown {
+			return nil
 		}
+		return parser.NewParseError(parsed.Span, "expected object for struct field %s", parsed.Name)
+	}
+
+	positionalIndex := 0
+	for _, att := range parsed.Object.Attributes {
+		var prop *attr
+		if att.Name == "" {
+			// Positional argument: find the field declared with pos=positionalIndex.
+			for _, p := range a.Properties {
+				if p.IsPositional && p.Position == positionalIndex {
+					prop = p
+					break
+				}
+			}
+			if prop == nil {
+				if ignoreUnknown {
+					positionalIndex++
+					continue
+				}
+				return parser.NewParseError(att.Span, "unexpected positional argument at index %d", positionalIndex)
+			}
+			positionalIndex++
+		} else {
+			var ok bool
+			prop, ok = a.Properties[att.Name]
+			if !ok {
+				if ignoreUnknown {
+					continue
+				}
+				return parser.NewParseError(att.Span, "unknown attribute %s", att.Name)
+			}
+		}
+
 		var field reflect.Value
 		if target.Kind() == reflect.Ptr {
 			field = target.Elem().FieldByName(prop.Name)
@@ -447,11 +486,10 @@ func (a *attr) setStruct(target reflect.Value, parsed *parser.Attribute, ignoreU
 			field.Set(v)
 		} else {
 			// set property
-			if err := prop.Set(field, &att, ignoreUnknown); err != nil {
+			if err := prop.Set(field, att, ignoreUnknown); err != nil {
 				return err
 			}
 		}
-
 	}
 	return nil
 }
