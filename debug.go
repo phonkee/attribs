@@ -6,7 +6,7 @@ import (
 )
 
 // Debug debugs attribs
-func Debug[A any, T any](tagName string, instance T) {
+func Debug[A any, T any](tagName string, instance T, ignoreUnknown bool) {
 	var attrInstance A
 
 	d, err := New(attrInstance)
@@ -31,7 +31,7 @@ func Debug[A any, T any](tagName string, instance T) {
 			continue
 		}
 
-		parsed, err := d.Parse(tag)
+		parsed, err := d.Parse(tag, ignoreUnknown)
 		if err != nil {
 			panicf("failed to parse tag %q: %v", tagName, err)
 		}

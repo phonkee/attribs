@@ -51,7 +51,7 @@ func TestAttrs(t *testing.T) {
 		d, err := attribs.New(&StringFieldTag{})
 		assert.NoError(t, err)
 		assert.NotNil(t, d)
-		x, err := d.Parse("label='hello', description='world'")
+		x, err := d.Parse("label='hello', description='world'", false)
 		assert.NoError(t, err)
 		assert.Equal(t, &StringFieldTag{
 			BaseTag{},
@@ -154,7 +154,7 @@ func TestAttrs(t *testing.T) {
 			defined, err := attribs.New(AttrDef{})
 			assert.NoError(t, err)
 
-			value, err := defined.Parse(item.input)
+			value, err := defined.Parse(item.input, false)
 			if item.errExpected != "" {
 				assert.NotNil(t, err)
 				assert.Contains(t, err.Error(), item.errExpected)
@@ -241,7 +241,7 @@ func TestAttrs(t *testing.T) {
 			defined, err := attribs.New(AttrDef{})
 			assert.NoError(t, err)
 
-			value, err := defined.Parse(item.input)
+			value, err := defined.Parse(item.input, false)
 			if item.errExpected != "" {
 				assert.NotNil(t, err)
 				assert.Contains(t, err.Error(), item.errExpected)
@@ -284,7 +284,7 @@ func TestAttrs(t *testing.T) {
 				},
 			},
 		} {
-			value, err := defined.Parse(item.input)
+			value, err := defined.Parse(item.input, false)
 			if item.errExpected != "" {
 				assert.NotNil(t, err)
 				assert.Contains(t, err.Error(), item.errExpected)
@@ -322,7 +322,7 @@ func TestAttrs(t *testing.T) {
 		} {
 			defined, err := attribs.New(Example{})
 			assert.NoError(t, err)
-			value, err := defined.Parse(item.input)
+			value, err := defined.Parse(item.input, false)
 			if item.errExpected != "" {
 				assert.NotNil(t, err)
 				assert.Contains(t, err.Error(), item.errExpected)
@@ -372,7 +372,7 @@ func TestAttrs(t *testing.T) {
 				},
 			},
 		} {
-			value, err := defined.Parse(item.input)
+			value, err := defined.Parse(item.input, false)
 			if item.errExpected != "" {
 				assert.NotNil(t, err)
 				assert.Contains(t, err.Error(), item.errExpected)
@@ -421,7 +421,7 @@ func TestAttrs(t *testing.T) {
 				},
 			},
 		} {
-			value, err := defined.Parse(item.input)
+			value, err := defined.Parse(item.input, false)
 			if item.err != nil {
 				assert.NotNil(t, err)
 				assert.ErrorIs(t, err, item.err)
@@ -491,7 +491,7 @@ func TestAttrs(t *testing.T) {
 				},
 			},
 		} {
-			value, err := defined.Parse(item.input)
+			value, err := defined.Parse(item.input, false)
 			if item.errExpected != "" {
 				assert.NotNil(t, err)
 				assert.Contains(t, err.Error(), item.errExpected)
@@ -523,7 +523,7 @@ func TestAttrs(t *testing.T) {
 			}
 
 			for _, item := range data {
-				value, err := def.Parse(item.input)
+				value, err := def.Parse(item.input, false)
 				if item.err != nil {
 					assert.ErrorIs(t, err, item.err)
 				} else {
@@ -563,7 +563,7 @@ func TestAttrs(t *testing.T) {
 		}
 
 		for _, item := range data {
-			value, err := def.Parse(item.input)
+			value, err := def.Parse(item.input, false)
 			if item.err != nil {
 				assert.ErrorIs(t, err, item.err)
 			} else {
@@ -611,7 +611,7 @@ func TestAttrs(t *testing.T) {
 		}
 
 		for _, item := range data {
-			value, err := def.Parse(item.input)
+			value, err := def.Parse(item.input, false)
 			if item.err != nil {
 				assert.ErrorIs(t, err, item.err)
 			} else {
@@ -625,7 +625,7 @@ func TestAttrs(t *testing.T) {
 		d, err := attribs.New(RecursiveStruct{})
 		assert.NoError(t, err)
 		assert.NotNil(t, d)
-		got, err := d.Parse("inner(struct(inner(hello='world')))")
+		got, err := d.Parse("inner(struct(inner(hello='world')))", false)
 		assert.NoError(t, err)
 		assert.Equal(t, RecursiveStruct{
 			Inner: &RecursiveInner{
@@ -662,7 +662,7 @@ func TestAttrs(t *testing.T) {
 			}},
 		} {
 			t.Run(td.name, func(t *testing.T) {
-				value, err := def.ParseKnown(td.input)
+				value, err := def.Parse(td.input, true)
 				if td.err != nil {
 					assert.ErrorIs(t, err, td.err)
 				} else {
